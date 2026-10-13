@@ -1,7 +1,20 @@
 const remindersModel = require('./reminders.model');
 
 async function listReminders(userId) {
-  return remindersModel.listForUser(userId);
+  const events = await remindersModel.listForUser(userId);
+  return {
+    ids: events.map((event) => event.id),
+    events: events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      category: event.category,
+      city: event.city,
+      startsAt: event.starts_at,
+      pricePaise: event.price_paise,
+      description: event.description,
+      imageUrl: event.image_url,
+    })),
+  };
 }
 
 async function setReminder(userId, eventId) {
