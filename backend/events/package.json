@@ -4,5 +4,5 @@
   "private": true,
   "main": "src/server.js",
   "scripts": { "dev": "node --watch src/server.js", "start": "node src/server.js" },
-  "dependencies": { "@eventnest/shared": "*" }
+  "dependencies": { "@eventnest/shared": "*", "@fastify/jwt": "^10.2.4" }
 }
