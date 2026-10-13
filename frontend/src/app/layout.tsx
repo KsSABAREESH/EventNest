@@ -3,8 +3,8 @@ import '@fontsource-variable/inter';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Sign in | EventNest',
-  description: 'Sign in or create your EventNest account to discover local events.',
+  title: 'EventNest | Discover local events',
+  description: 'Find music, workshops, food fairs, sports, and family events happening near you.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
