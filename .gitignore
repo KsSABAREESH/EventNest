@@ -3,6 +3,7 @@ node_modules/
 **/node_modules/
 .next/
 **/.next/
+frontend/next-env.d.ts
 out/
 dist/
 coverage/
