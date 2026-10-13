@@ -1,4 +1,6 @@
-type ReminderResponse = { message?: string; data?: string[]; reminded?: boolean };
+import type { CommunityEvent } from './events';
+
+type ReminderResponse = { message?: string; data?: string[]; events?: CommunityEvent[]; reminded?: boolean };
 
 const preferencesApiUrl = process.env.NEXT_PUBLIC_PREFERENCES_API_URL ?? 'http://localhost:4003';
 
@@ -24,6 +26,12 @@ export async function getReminderEventIds(token: string, signal?: AbortSignal): 
   const result = await requestReminderApi('/reminders', token, 'GET', signal);
   if (!Array.isArray(result.data)) throw new Error('The reminders service returned an incomplete response.');
   return result.data;
+}
+
+export async function getReminderEvents(token: string, signal?: AbortSignal): Promise<CommunityEvent[]> {
+  const result = await requestReminderApi('/reminders', token, 'GET', signal);
+  if (!Array.isArray(result.events)) throw new Error('The reminders service did not return saved event details.');
+  return result.events;
 }
 
 export async function saveEventReminder(token: string, eventId: string, reminded: boolean): Promise<void> {
