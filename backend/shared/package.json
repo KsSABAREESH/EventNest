@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "main": "src/index.js",
+  "scripts": {
+    "db:migrate": "node src/db/migrate.js",
+    "db:seed": "node src/db/seed.js"
+  },
   "exports": {
     ".": "./src/index.js",
     "./config": "./src/config.js",

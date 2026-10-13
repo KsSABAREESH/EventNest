@@ -1,7 +1,10 @@
 const { createApp } = require('@eventnest/shared');
+const registerAuthRoutes = require('./features/auth/auth.route');
 
 function buildApp() {
-  return createApp('auth-service');
+  const app = createApp('auth-service');
+  app.register(registerAuthRoutes, { prefix: '/auth' });
+  return app;
 }
 
 module.exports = { buildApp };

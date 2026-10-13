@@ -18,6 +18,8 @@
     "dev:auth": "npm run dev --workspace @eventnest/auth-service",
     "dev:events": "npm run dev --workspace @eventnest/events-service",
     "dev:preferences": "npm run dev --workspace @eventnest/preferences-service",
+    "db:migrate": "npm run db:migrate --workspace @eventnest/shared",
+    "db:seed": "npm run db:seed --workspace @eventnest/shared",
     "build": "npm run build --workspace @eventnest/frontend",
     "lint": "npm run lint --workspace @eventnest/frontend",
     "format:check": "prettier --check .",

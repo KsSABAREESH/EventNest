@@ -72,9 +72,9 @@ All APIs return JSON with consistent error shapes. Validate inputs at the API bo
 
 ## Delivery phases
 
-1. **Foundation and plan** — Confirm repo baseline and document this plan.
-2. **Boilerplate** — Add `frontend/` and `backend/`, workspace scripts, environment examples, ignore rules, formatting/lint configuration, shared Fastify config/logger/database/error helpers, and minimal health endpoints. Keep secrets out of committed files.
-3. **Database and service skeletons** — Add PostgreSQL migrations, repeatable 15-event seed, and independently runnable auth/events/preferences service skeletons with the agreed feature layout.
+1. **Foundation and plan (complete)** — Confirm repo baseline and document this plan.
+2. **Boilerplate (complete)** — Add `frontend/` and `backend/`, workspace scripts, environment examples, ignore rules, formatting/lint configuration, shared Fastify config/logger/database/error helpers, and minimal health endpoints. Keep secrets out of committed files.
+3. **Database and service skeletons (complete)** — Add PostgreSQL migrations, repeatable 15-event seed, and independently runnable auth/events/preferences service skeletons with the agreed feature layout.
 4. **API features** — Implement authentication and authorization, event administration/browsing, combined filters/pagination, favourites/feed, reminders, and card design persistence.
 5. **Frontend** — Build the responsive pages and feature components, connect them to the JSON APIs, and implement loading/empty/error and optimistic reminder behavior.
 6. **Project handoff** — Write the under-five-minute setup README and the three database/filter/security answers, document any remaining work, commit complete vertical slices regularly, and capture the requested phone/laptop screen recording.
