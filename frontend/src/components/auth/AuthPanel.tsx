@@ -77,14 +77,15 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
 
   return (
     <main className="grid min-h-dvh bg-white lg:grid-cols-2">
-      <section className="relative h-[230px] overflow-hidden bg-nest-ink sm:h-[300px] lg:sticky lg:top-0 lg:h-dvh lg:min-h-[620px]" aria-label="Discover local events">
+      <section className="relative aspect-[3/2] h-auto overflow-hidden bg-nest-ink lg:sticky lg:top-0 lg:aspect-auto lg:h-dvh" aria-label="Discover local events">
         <Image
           src="/discover-local-events-hero.png"
           alt="A colorful illustration of someone exploring music, food, sports, and community events on a phone."
           fill
           priority
           sizes="(max-width: 1023px) 100vw, 50vw"
-          className="object-cover object-[42%_center]"
+          className="object-cover"
+          style={{ objectPosition: 'left top' }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1e1d57]/75 via-transparent to-[#1e1d57]/10" />
         <Link href="/login" className="absolute left-6 top-5 hidden items-center gap-2.5 rounded-full border border-white/25 bg-white/90 py-1.5 pl-1.5 pr-4 text-sm font-bold tracking-tight text-nest-ink shadow-lg shadow-black/10 backdrop-blur sm:left-9 sm:top-8 lg:flex">
