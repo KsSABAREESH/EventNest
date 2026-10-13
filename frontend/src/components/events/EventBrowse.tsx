@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategories, saveFavouriteCategories, saveProfile, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
+import { getReminderEventIds, saveEventReminder } from '@/lib/api/reminders';
 import {
   eventCategories,
   getEvents,
+  getMyFeed,
   type CommunityEvent,
   type EventCategory,
   type EventsFilters,
@@ -70,10 +73,22 @@ function formatPrice(pricePaise: string) {
   }).format(rupees);
 }
 
-function EventCard({ event }: { event: CommunityEvent }) {
+function EventCard({
+  event,
+  reminded,
+  pending,
+  onToggleReminder,
+  className = '',
+}: {
+  event: CommunityEvent;
+  reminded: boolean;
+  pending: boolean;
+  onToggleReminder: (eventId: string) => void;
+  className?: string;
+}) {
   return (
-    <article className="group overflow-hidden rounded-xl border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)] sm:rounded-[1.35rem]">
-      <div className="relative h-32 overflow-hidden bg-[#eeedf8] sm:h-52">
+    <article className={`group flex flex-col overflow-hidden rounded-xl border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)] sm:rounded-[1.35rem] ${className}`}>
+      <div className="relative h-[clamp(10rem,48vw,16rem)] overflow-hidden bg-[#eeedf8] sm:h-52">
         {/* Event images are supplied by the API and may come from arbitrary event hosts. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -86,11 +101,8 @@ function EventCard({ event }: { event: CommunityEvent }) {
         <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-nest-ink shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:px-3 sm:py-1.5 sm:text-xs">
           {event.category}
         </span>
-        <span className="absolute bottom-2 right-2 rounded-lg bg-white px-2 py-1.5 text-[11px] font-bold text-nest-ink shadow-lg sm:bottom-4 sm:right-4 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm">
-          {formatPrice(event.pricePaise)}
-        </span>
       </div>
-      <div className="p-3 sm:p-5">
+      <div className="flex flex-1 flex-col p-3 sm:p-5">
         <p className="text-[10px] font-semibold tracking-wide text-[#6e6d82] sm:text-xs">{formatEventDate(event.startsAt)}</p>
         <h2 className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 tracking-[-0.025em] text-[#171717] sm:mt-2 sm:line-clamp-1 sm:min-h-0 sm:text-lg sm:leading-normal">{event.title}</h2>
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#666577] sm:mt-2 sm:text-sm">
@@ -98,16 +110,29 @@ function EventCard({ event }: { event: CommunityEvent }) {
           <span className="truncate">{event.city}</span>
         </div>
         <p className="mt-2 line-clamp-3 min-h-[54px] text-[11px] leading-[18px] text-[#656473] sm:mt-3 sm:line-clamp-2 sm:min-h-10 sm:text-sm sm:leading-5">{event.description}</p>
+        <div className="mt-auto flex items-center justify-between gap-2 pt-3 sm:pt-4">
+          <span className="min-w-0 truncate text-xs font-bold text-nest-ink sm:text-sm">{formatPrice(event.pricePaise)}</span>
+          <button
+            type="button"
+            onClick={() => onToggleReminder(event.id)}
+            disabled={pending}
+            aria-pressed={reminded}
+            className={`shrink-0 rounded-lg border px-2 py-2 text-[10px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nest-ink disabled:cursor-wait disabled:opacity-65 sm:rounded-xl sm:px-3 sm:text-xs ${reminded ? 'border-[#1e1d57]/15 bg-[#f1effb] text-nest-ink hover:border-nest-coral/50' : 'border-nest-coral bg-nest-coral text-white shadow-sm shadow-nest-coral/15 hover:bg-[#df0805]'}`}
+          >
+            {pending ? 'Saving…' : reminded ? '✓ Reminded' : 'Remind me'}
+          </button>
+        </div>
       </div>
     </article>
   );
 }
 
-export default function EventBrowse() {
+export default function EventBrowse({ myFeedRequested = false }: { myFeedRequested?: boolean }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
   const [filters, setFilters] = useState(initialFilters);
+  const [pageByView, setPageByView] = useState({ discover: 1, myFeed: 1 });
   const [result, setResult] = useState<EventsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -120,6 +145,35 @@ export default function EventBrowse() {
   const [selectedCategories, setSelectedCategories] = useState<FavouriteCategory[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [remindedEventIds, setRemindedEventIds] = useState<Set<string>>(() => new Set());
+  const [pendingReminderIds, setPendingReminderIds] = useState<Set<string>>(() => new Set());
+  const [reminderMessage, setReminderMessage] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+  const viewKey = myFeedRequested ? 'myFeed' : 'discover';
+  const activeFilters = { ...filters, page: pageByView[viewKey] };
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (event.target instanceof Node && !mobileMenuRef.current?.contains(event.target)) {
+        setMobileMenuOpen(false);
+        setMobileProfileOpen(false);
+      }
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+        setMobileProfileOpen(false);
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -142,6 +196,16 @@ export default function EventBrowse() {
         const user = await getCurrentUser(token, controller.signal);
         if (!active) return;
         setAccount(user);
+        if (user.role === 'member') {
+          try {
+            const ids = await getReminderEventIds(token, controller.signal);
+            if (active) setRemindedEventIds(new Set(ids));
+          } catch (reminderError) {
+            if (active && !controller.signal.aborted) {
+              setReminderMessage(reminderError instanceof Error ? reminderError.message : 'We could not load your saved reminders.');
+            }
+          }
+        }
         if (!user.profileComplete) {
           setProfileUsername(user.username ?? '');
           setProfileStep('username');
@@ -177,9 +241,12 @@ export default function EventBrowse() {
     const controller = new AbortController();
     let token = '';
     try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* visitor view */ }
-    const myFeed = searchParams.get('my_feed') === 'true' && account?.role === 'member' && Boolean(token);
-    if (searchParams.get('my_feed') === 'true' && !myFeed) router.replace('/events');
-    getEvents(filters, controller.signal, token, myFeed)
+    const myFeed = myFeedRequested && account?.role === 'member' && Boolean(token);
+    if (myFeedRequested && !myFeed) router.replace('/events');
+    const request = myFeed
+      ? getMyFeed(activeFilters, token, controller.signal)
+      : getEvents(activeFilters, controller.signal);
+    request
       .then((response) => setResult(response))
       .catch((requestError: unknown) => {
         if (!controller.signal.aborted) {
@@ -191,26 +258,20 @@ export default function EventBrowse() {
       });
 
     return () => controller.abort();
-  }, [filters, retry, searchParams, accountChecked, account, router]);
+  }, [filters, pageByView[viewKey], retry, myFeedRequested, accountChecked, account, router]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    setPageByView((current) => ({ ...current, [viewKey]: 1 }));
     setFilters({ ...draft, page: 1, pageSize: initialFilters.pageSize });
-  }
-
-  function clearFilters() {
-    setLoading(true);
-    setError('');
-    setDraft({ category: '', city: '', q: '' });
-    setFilters(initialFilters);
   }
 
   function changePage(page: number) {
     setLoading(true);
     setError('');
-    setFilters((current) => ({ ...current, page }));
+    setPageByView((current) => ({ ...current, [viewKey]: page }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -227,6 +288,9 @@ export default function EventBrowse() {
       // Clear the visible signed-in state even if storage is unavailable.
     }
     setAccount(null);
+    setRemindedEventIds(new Set());
+    setMobileMenuOpen(false);
+    setMobileProfileOpen(false);
     router.replace('/events');
   }
 
@@ -278,32 +342,69 @@ export default function EventBrowse() {
     }
   }
 
+  async function toggleReminder(eventId: string) {
+    let token = '';
+    try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* show sign-in message */ }
+    if (!token || account?.role !== 'member') {
+      setReminderMessage('Log in with a member account to save event reminders.');
+      return;
+    }
+    if (pendingReminderIds.has(eventId)) return;
+
+    const wasReminded = remindedEventIds.has(eventId);
+    setReminderMessage('');
+    setRemindedEventIds((current) => {
+      const next = new Set(current);
+      if (wasReminded) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+    setPendingReminderIds((current) => new Set(current).add(eventId));
+    try {
+      await saveEventReminder(token, eventId, !wasReminded);
+    } catch (requestError) {
+      setRemindedEventIds((current) => {
+        const next = new Set(current);
+        if (wasReminded) next.add(eventId);
+        else next.delete(eventId);
+        return next;
+      });
+      setReminderMessage(requestError instanceof Error ? requestError.message : 'We could not save your reminder. Please try again.');
+    } finally {
+      setPendingReminderIds((current) => {
+        const next = new Set(current);
+        next.delete(eventId);
+        return next;
+      });
+    }
+  }
+
   const totalPages = result?.pagination.totalPages ?? 0;
   const hasFilters = Boolean(filters.category || filters.city || filters.q);
-  const isMyFeed = searchParams.get('my_feed') === 'true' && Boolean(account);
+  const isMyFeed = myFeedRequested && Boolean(account);
 
   return (
-    <div className="min-h-dvh bg-[#fbfaf8] text-[#171717]">
+    <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-[#fbfaf8] text-[#171717]">
       <header className="sticky top-0 z-20 bg-nest-ink text-white shadow-[0_6px_24px_rgba(30,29,87,0.16)]">
-        <nav className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10" aria-label="Main navigation">
-          <Link href="/events" className="flex items-center gap-3 text-base font-bold tracking-tight sm:text-lg">
+        <nav className="mx-auto flex h-[72px] w-full min-w-0 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-3 sm:px-8 lg:px-10" aria-label="Main navigation">
+          <Link href="/events" className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight sm:gap-3 sm:text-lg">
             <BrandMark />
-            <span>EventNest</span>
+            <span className="hidden min-[380px]:inline">EventNest</span>
           </Link>
-          <div className="flex items-center gap-3 sm:gap-5">
-            <Link href="/events" className="text-sm font-semibold text-white/85 transition hover:text-white">Discover</Link>
-            {account?.role === 'member' && <Link href="/events?my_feed=true" className="text-sm font-semibold text-white/85 transition hover:text-white">My Feed</Link>}
+          <div className="hidden min-w-0 flex-1 items-center justify-end gap-5 sm:flex">
+            <Link href="/events" className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-white/85 transition hover:text-white sm:text-sm">Discover</Link>
+            {account?.role === 'member' && <Link href="/events?my_feed=true" className="shrink-0 whitespace-nowrap text-sm font-semibold text-white/85 transition hover:text-white">My Feed</Link>}
             {!accountChecked ? (
               <span className="px-3 py-2 text-sm text-white/65" aria-live="polite">Loading account…</span>
             ) : account ? (
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="flex max-w-[9rem] items-center gap-2 sm:max-w-none sm:gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white" aria-hidden="true">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-4">
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white sm:h-8 sm:w-8" aria-hidden="true">
                     {(account.username || account.email).slice(0, 1).toUpperCase()}
                   </span>
-                  <span className="truncate text-sm font-semibold text-white">{account.username || account.email}</span>
+                  <span className="hidden max-w-36 truncate text-sm font-semibold text-white md:inline">{account.username || account.email}</span>
                 </div>
-                <button onClick={logOut} className="rounded-full px-2 py-2 text-xs font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm">Log out</button>
+                <button onClick={logOut} className="whitespace-nowrap rounded-full px-2 py-2 text-[11px] font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm">Log out</button>
               </div>
             ) : (
               <>
@@ -312,18 +413,61 @@ export default function EventBrowse() {
               </>
             )}
           </div>
+          <div className="relative sm:hidden" ref={mobileMenuRef}>
+            <button
+              type="button"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation-menu"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-white transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
+                <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {mobileMenuOpen && (
+              <div id="mobile-navigation-menu" className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-[#1e1d57]/10 bg-white p-2 text-nest-ink shadow-[0_18px_50px_rgba(20,19,61,0.22)]">
+                <Link href="/events" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Discover</Link>
+                {account?.role === 'member' && <Link href="/events?my_feed=true" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">My Feed</Link>}
+                {!accountChecked ? (
+                  <p className="px-4 py-3 text-sm text-[#777687]" aria-live="polite">Loading account…</p>
+                ) : account ? (
+                  <>
+                    <button type="button" aria-expanded={mobileProfileOpen} onClick={() => setMobileProfileOpen((open) => !open)} className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold transition hover:bg-[#f1effb]">
+                      <span>Profile</span><span aria-hidden="true" className="text-xs text-[#777687]">{mobileProfileOpen ? '−' : '+'}</span>
+                    </button>
+                    {mobileProfileOpen && <div className="mx-3 mb-2 rounded-xl bg-[#f7f6fb] px-3 py-2.5"><p className="truncate text-sm font-semibold">{account.username || 'Your profile'}</p><p className="mt-0.5 truncate text-xs text-[#777687]">{account.email}</p></div>}
+                    <div className="my-1 border-t border-[#1e1d57]/10" />
+                    <button type="button" onClick={logOut} className="block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#b42320] transition hover:bg-[#fff1f0]">Log out</button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Log in</Link>
+                    <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-bold text-nest-coral transition hover:bg-[#fff1f0]">Join free</Link>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </nav>
       </header>
 
-      <main id="discover" className="mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-        <section className="relative overflow-hidden rounded-[2rem] bg-[#f1effb] px-6 py-9 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
+      <main id="discover" className="mx-auto w-full min-w-0 max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14 lg:px-10">
+        {reminderMessage && (
+          <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-nest-coral/20 bg-white px-4 py-3 text-sm text-[#a92622] shadow-sm">
+            <span>{reminderMessage}</span>
+            <button type="button" onClick={() => setReminderMessage('')} aria-label="Dismiss message" className="shrink-0 rounded-lg px-2 py-1 font-bold text-[#a92622] hover:bg-nest-coral/10">×</button>
+          </div>
+        )}
+        <section className="relative w-full min-w-0 overflow-hidden rounded-[2rem] bg-[#f1effb] px-5 py-8 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
           <div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full border-[44px] border-white/45" />
           <div className="pointer-events-none absolute -bottom-36 right-[22%] h-72 w-72 rounded-full bg-[#ff0905]/[0.045]" />
-          <div className="relative z-10 max-w-3xl">
+          <div className="relative z-10 w-full min-w-0 max-w-3xl">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#ff0905]/15 bg-white/70 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#d91c18]">
               <span className="h-1.5 w-1.5 rounded-full bg-nest-coral" /> Your city, a little closer
             </p>
-            <h1 className="max-w-2xl text-[2.5rem] font-bold leading-[1.04] tracking-[-0.055em] text-nest-ink sm:text-5xl lg:text-[3.75rem]">
+            <h1 className="max-w-2xl break-words text-[clamp(2rem,9vw,2.5rem)] font-bold leading-[1.04] tracking-[-0.055em] text-nest-ink sm:text-5xl lg:text-[3.75rem]">
               Find your next <span className="text-nest-coral">good plan.</span>
             </h1>
             <p className="mt-4 max-w-xl text-[15px] leading-6 text-[#5c5b70] sm:text-base sm:leading-7">
@@ -331,7 +475,7 @@ export default function EventBrowse() {
             </p>
           </div>
 
-          <form onSubmit={applyFilters} className="relative z-10 mt-8 grid gap-3 rounded-2xl border border-white bg-white p-3 shadow-[0_12px_40px_rgba(30,29,87,0.1)] sm:grid-cols-2 sm:p-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(150px,0.8fr)_auto]">
+          <form onSubmit={applyFilters} className="relative z-10 mt-8 grid w-full min-w-0 gap-3 rounded-2xl border border-white bg-white p-3 shadow-[0_12px_40px_rgba(30,29,87,0.1)] sm:grid-cols-2 sm:p-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(150px,0.8fr)_auto]">
             <label className="flex h-12 min-w-0 items-center gap-3 rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
               <span className="text-[#737286]"><SearchIcon /></span>
               <span className="sr-only">Search events</span>
@@ -343,7 +487,7 @@ export default function EventBrowse() {
                 className="w-full min-w-0 border-0 bg-transparent text-sm text-[#171717] outline-none placeholder:text-[#9594a2]"
               />
             </label>
-            <label className="flex h-12 items-center gap-3 rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
+            <label className="flex h-12 min-w-0 items-center gap-3 rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
               <span className="text-nest-coral"><PinIcon /></span>
               <span className="sr-only">City</span>
               <input
@@ -354,7 +498,7 @@ export default function EventBrowse() {
                 className="w-full min-w-0 border-0 bg-transparent text-sm text-[#171717] outline-none placeholder:text-[#9594a2]"
               />
             </label>
-            <label className="flex h-12 items-center rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
+            <label className="flex h-12 min-w-0 items-center rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
               <span className="sr-only">Category</span>
               <select
                 value={draft.category}
@@ -366,7 +510,7 @@ export default function EventBrowse() {
               </select>
               <span aria-hidden="true" className="ml-2 text-xs text-[#858493]">⌄</span>
             </label>
-            <button type="submit" className="flex h-12 items-center justify-center gap-2 rounded-xl bg-nest-coral px-6 text-sm font-bold text-white shadow-md shadow-nest-coral/15 transition hover:bg-[#df0805] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nest-ink">
+            <button type="submit" className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-nest-coral px-6 text-sm font-bold text-white shadow-md shadow-nest-coral/15 transition hover:bg-[#df0805] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nest-ink">
               <SearchIcon /> <span>Find events</span>
             </button>
           </form>
@@ -387,10 +531,11 @@ export default function EventBrowse() {
           </div>
 
           {loading && (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3" aria-label="Loading events" aria-busy="true">
+            <div className="-mx-5 snap-x snap-mandatory overflow-x-auto scroll-smooth px-0 pb-3 sm:mx-0 sm:snap-none sm:overflow-visible" role="region" tabIndex={0} aria-label="Upcoming events, scroll horizontally to see more">
+              <div className="flex w-max gap-3 px-5 sm:grid sm:w-auto sm:grid-cols-2 sm:gap-5 sm:px-0 lg:grid-cols-3" aria-busy="true">
               {Array.from({ length: 6 }, (_, index) => (
-                <div key={index} className="overflow-hidden rounded-xl border border-[#1e1d57]/8 bg-white sm:rounded-[1.35rem]">
-                  <div className="h-32 animate-pulse bg-[#eeedf4] sm:h-52" />
+                <div key={index} className="w-[calc(50vw_-_1.75rem)] shrink-0 snap-start overflow-hidden rounded-xl border border-[#1e1d57]/8 bg-white sm:w-auto sm:rounded-[1.35rem]">
+                  <div className="h-[clamp(10rem,48vw,16rem)] animate-pulse bg-[#eeedf4] sm:h-52" />
                   <div className="space-y-3 p-3 sm:p-5">
                     <div className="h-3 w-28 animate-pulse rounded bg-[#eeedf4]" />
                     <div className="h-5 w-3/4 animate-pulse rounded bg-[#eeedf4]" />
@@ -399,6 +544,7 @@ export default function EventBrowse() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
 
@@ -413,29 +559,52 @@ export default function EventBrowse() {
 
           {!loading && !error && result?.data.length === 0 && (
             <div className="rounded-3xl border border-[#1e1d57]/10 bg-white px-6 py-14 text-center shadow-sm sm:px-10">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1effb] text-2xl" aria-hidden="true">✦</div>
+              <Image src="/empty-events-calendar.png" alt="An empty calendar with a search icon and paper plane" width={400} height={300} className="mx-auto h-40 w-auto object-contain sm:h-48" />
               <h3 className="mt-4 text-lg font-bold text-nest-ink">No events found just yet</h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#666577]">{isMyFeed ? 'There are no upcoming events in your favourite categories yet. Discover all events to find something new.' : 'Try another city or category. There may be something lovely just around the corner.'}</p>
-              {hasFilters && <button onClick={clearFilters} className="mt-5 text-sm font-bold text-nest-coral underline underline-offset-4">Clear filters</button>}
+              {isMyFeed && (
+                <Link
+                  href="/events"
+                  onClick={() => {
+                    setDraft({ category: '', city: '', q: '' });
+                    setFilters(initialFilters);
+                    setPageByView((current) => ({ ...current, discover: 1 }));
+                  }}
+                  className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-nest-coral px-5 py-3 text-sm font-bold text-white shadow-md shadow-nest-coral/15 transition hover:bg-[#df0805]"
+                >
+                  Explore other categories
+                </Link>
+              )}
             </div>
           )}
 
           {!loading && !error && result && result.data.length > 0 && (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-                {result.data.map((event) => <EventCard key={event.id} event={event} />)}
+              <div className="-mx-5 snap-x snap-mandatory overflow-x-auto scroll-smooth px-0 pb-3 sm:mx-0 sm:snap-none sm:overflow-visible" role="region" tabIndex={0} aria-label="Upcoming events, scroll horizontally to see more">
+                <div className="flex w-max gap-3 px-5 sm:grid sm:w-auto sm:grid-cols-2 sm:gap-5 sm:px-0 lg:grid-cols-3">
+                {result.data.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    reminded={remindedEventIds.has(event.id)}
+                    pending={pendingReminderIds.has(event.id)}
+                    onToggleReminder={toggleReminder}
+                    className="w-[calc(50vw_-_1.75rem)] shrink-0 snap-start sm:w-auto"
+                  />
+                ))}
+                </div>
               </div>
               {totalPages > 1 && (
                 <nav className="mt-9 flex items-center justify-center gap-3" aria-label="Event pages">
                   <button
-                    onClick={() => changePage(filters.page - 1)}
-                    disabled={filters.page <= 1}
+                    onClick={() => changePage(activeFilters.page - 1)}
+                    disabled={activeFilters.page <= 1}
                     className="rounded-xl border border-[#1e1d57]/15 bg-white px-4 py-2.5 text-sm font-semibold text-nest-ink transition hover:border-nest-coral disabled:cursor-not-allowed disabled:opacity-40"
                   >Previous</button>
-                  <span className="px-2 text-sm font-medium text-[#666577]" aria-live="polite">Page {filters.page} of {totalPages}</span>
+                  <span className="px-2 text-sm font-medium text-[#666577]" aria-live="polite">Page {activeFilters.page} of {totalPages}</span>
                   <button
-                    onClick={() => changePage(filters.page + 1)}
-                    disabled={filters.page >= totalPages}
+                    onClick={() => changePage(activeFilters.page + 1)}
+                    disabled={activeFilters.page >= totalPages}
                     className="rounded-xl border border-[#1e1d57]/15 bg-white px-4 py-2.5 text-sm font-semibold text-nest-ink transition hover:border-nest-coral disabled:cursor-not-allowed disabled:opacity-40"
                   >Next</button>
                 </nav>

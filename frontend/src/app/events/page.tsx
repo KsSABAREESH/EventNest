@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   description: 'Browse upcoming community events by category, city, or search.',
 };
 
-export default function EventsPage() {
-  return <EventBrowse />;
+export default async function EventsPage({ searchParams }: { searchParams: Promise<{ my_feed?: string }> }) {
+  const params = await searchParams;
+  return <EventBrowse myFeedRequested={params.my_feed === 'true'} />;
 }
