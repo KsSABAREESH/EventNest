@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { submitCredentials } from '@/lib/api/auth';
 
@@ -34,6 +35,7 @@ function EyeIcon({ visible }: { visible: boolean }) {
 }
 
 export default function AuthPanel({ mode }: AuthPanelProps) {
+  const router = useRouter();
   const isSignup = mode === 'signup';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +70,7 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
       );
       setPassword('');
       setConfirmPassword('');
+      router.replace('/events');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {
