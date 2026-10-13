@@ -1,0 +1,8 @@
+{
+  "name": "@eventnest/preferences-service",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": { "dev": "node --watch src/server.js", "start": "node src/server.js" },
+  "dependencies": { "@eventnest/shared": "*" }
+}

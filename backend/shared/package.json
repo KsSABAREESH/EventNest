@@ -1,0 +1,21 @@
+{
+  "name": "@eventnest/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./config": "./src/config.js",
+    "./database": "./src/database.js",
+    "./health": "./src/health.js",
+    "./logger": "./src/logger.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "dotenv": "^16.6.1",
+    "fastify": "^5.12.5",
+    "pg": "^8.16.3",
+    "pino": "^9.9.0"
+  }
+}

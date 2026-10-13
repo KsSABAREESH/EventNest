@@ -1,0 +1,29 @@
+{
+  "name": "eventnest",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "frontend",
+    "backend/shared",
+    "backend/auth",
+    "backend/events",
+    "backend/preferences"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @eventnest/frontend",
+    "dev:auth": "npm run dev --workspace @eventnest/auth-service",
+    "dev:events": "npm run dev --workspace @eventnest/events-service",
+    "dev:preferences": "npm run dev --workspace @eventnest/preferences-service",
+    "build": "npm run build --workspace @eventnest/frontend",
+    "lint": "npm run lint --workspace @eventnest/frontend",
+    "format:check": "prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

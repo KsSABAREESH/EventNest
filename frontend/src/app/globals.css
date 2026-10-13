@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-nest-ink: #1e1d57;
+  --color-nest-coral: #ff0905;
+  --color-nest-paper: #ffffff;
+  --font-sans: 'Inter Variable', Arial, Helvetica, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  background: #ffffff;
+  color: #171717;
+  font-family: 'Inter Variable', Arial, Helvetica, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, a { -webkit-tap-highlight-color: transparent; }

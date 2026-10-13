@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: eventnest
+      POSTGRES_USER: eventnest
+      POSTGRES_PASSWORD: eventnest
+    ports:
+      - '5432:5432'
+    volumes:
+      - eventnest-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eventnest -d eventnest']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  eventnest-postgres:
