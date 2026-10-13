@@ -4,7 +4,7 @@ EventNest is a community events board. The repository is an npm workspace with a
 
 ## Current progress
 
-The frontend/backend scaffold, PostgreSQL migrations, repeatable sample-event seed, and backend feature-module skeletons are in place. Product APIs and visitor/admin page flows are the next implementation phase. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
+The auth service provides signup, login, and token-protected identity endpoints. The frontend and event/preferences product APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
 
 ## Requirements
 
@@ -23,6 +23,8 @@ npm install
 npm run db:migrate
 npm run db:seed
 ```
+
+Before starting the auth service, replace the `JWT_SECRET` and `ADMIN_PASSWORD` placeholders in `backend/.env`. Use a random JWT secret with at least 32 characters and an admin password with at least 12 characters. The configured `ADMIN_EMAIL` and `ADMIN_PASSWORD` are the admin login credentials.
 
 The seed can be run again safely; it upserts the same 15 sample events and uses dates relative to the current day.
 
@@ -61,7 +63,15 @@ Foreign keys protect references and unique keys prevent duplicate preferences. T
 
 ## API and security notes
 
-At this stage, only health and readiness endpoints are implemented. Feature route/controller/service/model files are scaffolds. The event browse indexes are prepared for upcoming date ordering, optional category/city filters, and full-text search across title, city, and description. The product API list, admin bootstrap/login instructions, and the final password-storage and authorization explanation will be filled in as those APIs are implemented.
+Auth endpoints run on port 4001:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/signup` | Create a member account and return a bearer access token. |
+| `POST` | `/auth/login` | Log in a member or the configured admin and return a bearer access token. |
+| `GET` | `/auth/me` | Return the current identity; requires `Authorization: Bearer <token>`. |
+
+Signup and login accept JSON `{ "email": "person@example.com", "password": "at-least-8-characters" }`. Access tokens expire after one hour. Signup is limited to five requests per minute per process, and login to ten. Passwords are stored as salted `scrypt` hashes; the admin account is configured through environment variables and cannot be registered as a member. JWT signing uses `JWT_SECRET`, and `/auth/me` verifies the signature, issuer, and expiry. Event filtering, admin event management, and the visitor preference APIs remain to be implemented. The event browse indexes are ready for upcoming date ordering, optional category/city filters, and full-text search.
 
 ## Demo recording
 
