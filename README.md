@@ -4,7 +4,7 @@ EventNest is a community events board. The repository is an npm workspace with a
 
 ## Current progress
 
-The auth service provides signup, login, token-protected profile endpoints, and first-login profile completion. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. The preferences service saves favourite categories and serves each member's upcoming personalized feed. Event administration, reminders, and card design APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
+The auth service provides signup, login, token-protected profile endpoints, and first-login profile completion. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. The preferences service saves favourite categories, serves each member's upcoming personalized feed, and stores event reminders. Event administration and card design APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
 
 ## Requirements
 
@@ -79,6 +79,7 @@ Events endpoints run on port 4002:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/events` | Browse active, upcoming events with optional `category`, `city`, `q`, `page`, and `pageSize` query parameters. |
+| `GET` | `/events/my-feed` | Browse active, upcoming events in the signed-in member's favourite categories; requires a member bearer token and accepts the same filters and pagination parameters. |
 
 The filters combine with AND. Text search covers event title, city, and description. Results are ordered by nearest event first. Pagination defaults to 12 events per page and allows up to 50. The endpoint returns `data` and `pagination` fields; event prices are integer paise values in `pricePaise`.
 
@@ -89,6 +90,9 @@ Preferences endpoints run on port 4003 and require a member bearer token:
 | `GET` | `/preferences/favourites` | Get the signed-in member's favourite categories. |
 | `PUT` | `/preferences/favourites` | Replace favourite categories with `{ "categories": ["Music", "Food"] }`. |
 | `GET` | `/feed` | Browse upcoming active events from favourite categories. Accepts the same category, city, text, and pagination filters as `/events`. |
+| `GET` | `/reminders` | Get event IDs with saved reminders. |
+| `PUT` | `/reminders/:eventId` | Save a reminder for an upcoming active event. |
+| `DELETE` | `/reminders/:eventId` | Remove a saved reminder. |
 
 ## Demo recording
 
