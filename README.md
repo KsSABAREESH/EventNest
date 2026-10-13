@@ -90,7 +90,7 @@ Preferences endpoints run on port 4003 and require a member bearer token:
 | `GET` | `/preferences/favourites` | Get the signed-in member's favourite categories. |
 | `PUT` | `/preferences/favourites` | Replace favourite categories with `{ "categories": ["Music", "Food"] }`. |
 | `GET` | `/feed` | Browse upcoming active events from favourite categories. Accepts the same category, city, text, and pagination filters as `/events`. |
-| `GET` | `/reminders` | Get event IDs with saved reminders. |
+| `GET` | `/reminders` | Get event IDs and event details for the member's saved reminders. |
 | `PUT` | `/reminders/:eventId` | Save a reminder for an upcoming active event. |
 | `DELETE` | `/reminders/:eventId` | Remove a saved reminder. |
 

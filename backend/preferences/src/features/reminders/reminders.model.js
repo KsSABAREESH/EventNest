@@ -2,10 +2,15 @@ const { getPool } = require('@eventnest/shared');
 
 async function listForUser(userId) {
   const result = await getPool().query(
-    'SELECT event_id FROM event_reminders WHERE user_id = $1',
+    `SELECT event.id, event.title, event.category, event.city, event.starts_at,
+            event.price_paise, event.description, event.image_url
+     FROM event_reminders reminder
+     JOIN events event ON event.id = reminder.event_id
+     WHERE reminder.user_id = $1
+     ORDER BY event.starts_at ASC, event.id ASC`,
     [userId],
   );
-  return result.rows.map((row) => row.event_id);
+  return result.rows;
 }
 
 async function createForUser(userId, eventId) {

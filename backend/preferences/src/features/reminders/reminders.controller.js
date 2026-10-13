@@ -10,7 +10,8 @@ function ensureMember(request, reply) {
 
 async function list(request, reply) {
   if (!ensureMember(request, reply)) return;
-  return reply.send({ data: await remindersService.listReminders(request.user.sub) });
+  const reminders = await remindersService.listReminders(request.user.sub);
+  return reply.send({ data: reminders.ids, events: reminders.events });
 }
 
 async function create(request, reply) {

@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategories, saveFavouriteCategories, saveProfile, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
 import { getReminderEventIds, saveEventReminder } from '@/lib/api/reminders';
+import EventsNavbar from '@/components/navigation/EventsNavbar';
 import {
   eventCategories,
   getEvents,
@@ -17,18 +18,6 @@ import {
 } from '@/lib/api/events';
 
 const initialFilters: EventsFilters = { category: '', city: '', q: '', page: 1, pageSize: 9 };
-
-function BrandMark() {
-  return (
-    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-        <path d="M4.5 10.25 12 4l7.5 6.25v8.5a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.75v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="M9 20v-5.25A1.75 1.75 0 0 1 10.75 13h2.5A1.75 1.75 0 0 1 15 14.75V20" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="m8.25 8.75 1 .1m6.5-.1-1 .1" stroke="#ff0905" strokeWidth="2.2" strokeLinecap="round" />
-      </svg>
-    </span>
-  );
-}
 
 function SearchIcon() {
   return (
@@ -129,7 +118,6 @@ function EventCard({
 
 export default function EventBrowse({ myFeedRequested = false }: { myFeedRequested?: boolean }) {
   const router = useRouter();
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
   const [filters, setFilters] = useState(initialFilters);
   const [pageByView, setPageByView] = useState({ discover: 1, myFeed: 1 });
@@ -148,32 +136,8 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
   const [remindedEventIds, setRemindedEventIds] = useState<Set<string>>(() => new Set());
   const [pendingReminderIds, setPendingReminderIds] = useState<Set<string>>(() => new Set());
   const [reminderMessage, setReminderMessage] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
   const viewKey = myFeedRequested ? 'myFeed' : 'discover';
   const activeFilters = { ...filters, page: pageByView[viewKey] };
-
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    function closeOnOutsideClick(event: PointerEvent) {
-      if (event.target instanceof Node && !mobileMenuRef.current?.contains(event.target)) {
-        setMobileMenuOpen(false);
-        setMobileProfileOpen(false);
-      }
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setMobileMenuOpen(false);
-        setMobileProfileOpen(false);
-      }
-    }
-    document.addEventListener('pointerdown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -289,8 +253,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
     }
     setAccount(null);
     setRemindedEventIds(new Set());
-    setMobileMenuOpen(false);
-    setMobileProfileOpen(false);
     router.replace('/events');
   }
 
@@ -385,73 +347,7 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
 
   return (
     <div className="min-h-dvh w-full min-w-0 overflow-x-clip bg-[#fbfaf8] text-[#171717]">
-      <header className="sticky top-0 z-20 bg-nest-ink text-white shadow-[0_6px_24px_rgba(30,29,87,0.16)]">
-        <nav className="mx-auto flex h-[72px] w-full min-w-0 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-3 sm:px-8 lg:px-10" aria-label="Main navigation">
-          <Link href="/events" className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight sm:gap-3 sm:text-lg">
-            <BrandMark />
-            <span className="hidden min-[380px]:inline">EventNest</span>
-          </Link>
-          <div className="hidden min-w-0 flex-1 items-center justify-end gap-5 sm:flex">
-            <Link href="/events" className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-white/85 transition hover:text-white sm:text-sm">Discover</Link>
-            {account?.role === 'member' && <Link href="/events?my_feed=true" className="shrink-0 whitespace-nowrap text-sm font-semibold text-white/85 transition hover:text-white">My Feed</Link>}
-            {!accountChecked ? (
-              <span className="px-3 py-2 text-sm text-white/65" aria-live="polite">Loading account…</span>
-            ) : account ? (
-              <div className="flex shrink-0 items-center gap-1 sm:gap-4">
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white sm:h-8 sm:w-8" aria-hidden="true">
-                    {(account.username || account.email).slice(0, 1).toUpperCase()}
-                  </span>
-                  <span className="hidden max-w-36 truncate text-sm font-semibold text-white md:inline">{account.username || account.email}</span>
-                </div>
-                <button onClick={logOut} className="whitespace-nowrap rounded-full px-2 py-2 text-[11px] font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm">Log out</button>
-              </div>
-            ) : (
-              <>
-                <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10 hover:text-white sm:px-4">Log in</Link>
-                <Link href="/signup" className="rounded-full bg-nest-coral px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-black/10 transition hover:bg-[#df0805] sm:px-5">Join free</Link>
-              </>
-            )}
-          </div>
-          <div className="relative sm:hidden" ref={mobileMenuRef}>
-            <button
-              type="button"
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-navigation-menu"
-              onClick={() => setMobileMenuOpen((open) => !open)}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-white transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
-                <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-            {mobileMenuOpen && (
-              <div id="mobile-navigation-menu" className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-[#1e1d57]/10 bg-white p-2 text-nest-ink shadow-[0_18px_50px_rgba(20,19,61,0.22)]">
-                <Link href="/events" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Discover</Link>
-                {account?.role === 'member' && <Link href="/events?my_feed=true" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">My Feed</Link>}
-                {!accountChecked ? (
-                  <p className="px-4 py-3 text-sm text-[#777687]" aria-live="polite">Loading account…</p>
-                ) : account ? (
-                  <>
-                    <button type="button" aria-expanded={mobileProfileOpen} onClick={() => setMobileProfileOpen((open) => !open)} className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold transition hover:bg-[#f1effb]">
-                      <span>Profile</span><span aria-hidden="true" className="text-xs text-[#777687]">{mobileProfileOpen ? '−' : '+'}</span>
-                    </button>
-                    {mobileProfileOpen && <div className="mx-3 mb-2 rounded-xl bg-[#f7f6fb] px-3 py-2.5"><p className="truncate text-sm font-semibold">{account.username || 'Your profile'}</p><p className="mt-0.5 truncate text-xs text-[#777687]">{account.email}</p></div>}
-                    <div className="my-1 border-t border-[#1e1d57]/10" />
-                    <button type="button" onClick={logOut} className="block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#b42320] transition hover:bg-[#fff1f0]">Log out</button>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Log in</Link>
-                    <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-bold text-nest-coral transition hover:bg-[#fff1f0]">Join free</Link>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </nav>
-      </header>
+      <EventsNavbar account={account} accountLoading={!accountChecked} onLogout={logOut} />
 
       <main id="discover" className="mx-auto w-full min-w-0 max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14 lg:px-10">
         {reminderMessage && (
