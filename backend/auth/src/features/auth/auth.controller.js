@@ -27,13 +27,20 @@ async function login(request, reply) {
 }
 
 async function me(request) {
-  return {
-    user: {
-      id: request.user.sub,
-      email: request.user.email,
-      role: request.user.role,
-    },
-  };
+  const user = await authService.getProfile({
+    id: request.user.sub,
+    email: request.user.email,
+    role: request.user.role,
+  });
+  return { user };
 }
 
-module.exports = { login, me, signup };
+async function updateProfile(request) {
+  const user = await authService.updateProfile(
+    { id: request.user.sub, role: request.user.role },
+    request.body,
+  );
+  return { user };
+}
+
+module.exports = { login, me, signup, updateProfile };

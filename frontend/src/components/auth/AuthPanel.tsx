@@ -70,7 +70,7 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
       );
       setPassword('');
       setConfirmPassword('');
-      router.replace('/events');
+      router.replace(result.user.profileComplete ? '/events' : '/profile/setup');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {

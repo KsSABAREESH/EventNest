@@ -2,6 +2,10 @@ export type AuthUser = {
   id: string;
   email: string;
   role: 'member' | 'admin';
+  username: string | null;
+  mobileNumber: string | null;
+  photoUrl: string | null;
+  profileComplete: boolean;
 };
 
 export type AuthResponse = {
@@ -14,6 +18,16 @@ export type AuthResponse = {
 type ApiErrorResponse = {
   message?: string;
 };
+
+export class AuthApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AuthApiError';
+    this.status = status;
+  }
+}
 
 const authApiUrl = process.env.NEXT_PUBLIC_AUTH_API_URL ?? 'http://localhost:4001';
 
@@ -34,7 +48,7 @@ export async function submitCredentials(
 
   const result = (await response.json().catch(() => ({}))) as AuthResponse & ApiErrorResponse;
   if (!response.ok) {
-    throw new Error(result.message ?? 'We could not sign you in. Please try again.');
+    throw new AuthApiError(result.message ?? 'We could not sign you in. Please try again.', response.status);
   }
 
   if (!result.accessToken || !result.user) {
@@ -42,4 +56,46 @@ export async function submitCredentials(
   }
 
   return result;
+}
+
+export async function getCurrentUser(token: string, signal?: AbortSignal): Promise<AuthUser> {
+  let response: Response;
+  try {
+    response = await fetch(`${authApiUrl}/auth/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new Error('Could not reach EventNest authentication. Check that the auth service is running.');
+  }
+
+  const result = (await response.json().catch(() => ({}))) as { user?: AuthUser } & ApiErrorResponse;
+  if (!response.ok) throw new AuthApiError(result.message ?? 'Please sign in again.', response.status);
+  if (!result.user) throw new Error('The server response was incomplete.');
+  return result.user;
+}
+
+export async function saveProfile(
+  token: string,
+  profile: { username: string; mobileNumber: string; photoUrl?: string },
+): Promise<AuthUser> {
+  let response: Response;
+  try {
+    response = await fetch(`${authApiUrl}/auth/me/profile`, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(profile),
+    });
+  } catch {
+    throw new Error('Could not reach EventNest authentication. Check that the auth service is running.');
+  }
+
+  const result = (await response.json().catch(() => ({}))) as { user?: AuthUser } & ApiErrorResponse;
+  if (!response.ok) throw new AuthApiError(result.message ?? 'We could not save your profile.', response.status);
+  if (!result.user) throw new Error('The server response was incomplete.');
+  return result.user;
 }

@@ -4,7 +4,7 @@ EventNest is a community events board. The repository is an npm workspace with a
 
 ## Current progress
 
-The auth service provides signup, login, and token-protected identity endpoints. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. Event administration and the visitor preference APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
+The auth service provides signup, login, token-protected profile endpoints, and first-login profile completion. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. Event administration and the visitor preference APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
 
 ## Requirements
 
@@ -53,7 +53,7 @@ Backend feature modules use `feature.route.js`, `feature.controller.js`, `featur
 
 ## Database structure
 
-- `users` stores normalized email addresses, password hashes, and member/admin roles.
+- `users` stores normalized email addresses, password hashes, member/admin roles, and optional profile fields (username, mobile number, and photo URL). A member completes the required profile when username and mobile number are set.
 - `events` stores event details, category, city, timezone-aware start time, integer paise price, active state, optional seed key, and a generated text-search document. A database trigger rejects event deletion; admins will deactivate events instead.
 - `user_favourite_categories` stores a unique category per user.
 - `event_reminders` stores one reminder per user and event.
@@ -69,9 +69,10 @@ Auth endpoints run on port 4001:
 | --- | --- | --- |
 | `POST` | `/auth/signup` | Create a member account and return a bearer access token. |
 | `POST` | `/auth/login` | Log in a member or the configured admin and return a bearer access token. |
-| `GET` | `/auth/me` | Return the current identity; requires `Authorization: Bearer <token>`. |
+| `GET` | `/auth/me` | Return the current identity and profile-completion status; requires `Authorization: Bearer <token>`. |
+| `PATCH` | `/auth/me/profile` | Save username, mobile number, and optional photo URL; requires a bearer token. |
 
-Signup and login accept JSON `{ "email": "person@example.com", "password": "at-least-8-characters" }`. Access tokens expire after one hour. Signup is limited to five requests per minute per process, and login to ten. Passwords are stored as salted `scrypt` hashes; the admin account is configured through environment variables and cannot be registered as a member. JWT signing uses `JWT_SECRET`, and `/auth/me` verifies the signature, issuer, and expiry. Admin event management and the visitor preference APIs remain to be implemented. The event browse indexes support upcoming date ordering, optional category/city filters, and full-text search.
+Signup and login accept JSON `{ "email": "person@example.com", "password": "at-least-8-characters" }`. Access tokens expire after one hour. Signup is limited to five requests per minute per process, and login to ten. Passwords are stored as salted `scrypt` hashes; the admin account is configured through environment variables and cannot be registered as a member. JWT signing uses `JWT_SECRET`, and `/auth/me` verifies the signature, issuer, and expiry. New member accounts complete a username and mobile number before entering the events page; a public photo URL is optional. Admin event management and the visitor preference APIs remain to be implemented. The event browse indexes support upcoming date ordering, optional category/city filters, and full-text search.
 
 Events endpoints run on port 4002:
 

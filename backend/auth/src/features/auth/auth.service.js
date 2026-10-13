@@ -63,7 +63,15 @@ function normalizeEmail(email) {
 }
 
 function toPublicUser(user) {
-  return { id: user.id, email: user.email, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    username: user.username ?? null,
+    mobileNumber: user.mobile_number ?? null,
+    photoUrl: user.photo_url ?? null,
+    profileComplete: Boolean(user.username && user.mobile_number),
+  };
 }
 
 async function signup({ email: rawEmail, password }) {
@@ -91,7 +99,15 @@ async function login({ email: rawEmail, password }) {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (adminEmail && adminPassword && email === adminEmail && constantTimeStringEqual(password, adminPassword)) {
-    return { id: 'admin', email: adminEmail, role: 'admin' };
+    return {
+      id: 'admin',
+      email: adminEmail,
+      role: 'admin',
+      username: 'Admin',
+      mobileNumber: null,
+      photoUrl: null,
+      profileComplete: true,
+    };
   }
 
   const user = await authModel.findUserByEmail(email);
@@ -106,4 +122,42 @@ async function login({ email: rawEmail, password }) {
   return toPublicUser(user);
 }
 
-module.exports = { login, signup };
+async function getProfile({ id, email, role }) {
+  if (role === 'admin' && id === 'admin') {
+    return { id, email, role, username: 'Admin', mobileNumber: null, photoUrl: null, profileComplete: true };
+  }
+
+  const user = await authModel.findUserById(id);
+  if (!user) throw httpError(401, 'Your account could not be found. Please sign in again.', 'ACCOUNT_NOT_FOUND');
+  return toPublicUser(user);
+}
+
+function normalizeMobileNumber(value) {
+  return value.replace(/[()\s-]/g, '');
+}
+
+async function updateProfile({ id, role }, { username: rawUsername, mobileNumber: rawMobileNumber, photoUrl: rawPhotoUrl }) {
+  if (role !== 'member') {
+    throw httpError(403, 'This profile cannot be updated.', 'PROFILE_UPDATE_FORBIDDEN');
+  }
+
+  const username = rawUsername.trim();
+  const mobileNumber = normalizeMobileNumber(rawMobileNumber);
+  const photoUrl = rawPhotoUrl?.trim() || null;
+
+  if (username.length < 2 || username.length > 40) {
+    throw httpError(400, 'Username must be between 2 and 40 characters.', 'INVALID_USERNAME');
+  }
+  if (!/^\+?\d{10,15}$/.test(mobileNumber)) {
+    throw httpError(400, 'Enter a valid mobile number with 10 to 15 digits.', 'INVALID_MOBILE_NUMBER');
+  }
+  if (photoUrl && !/^https?:\/\//i.test(photoUrl)) {
+    throw httpError(400, 'Profile photo must use an HTTP or HTTPS URL.', 'INVALID_PHOTO_URL');
+  }
+
+  const user = await authModel.updateUserProfile({ id, username, mobileNumber, photoUrl });
+  if (!user) throw httpError(401, 'Your account could not be found. Please sign in again.', 'ACCOUNT_NOT_FOUND');
+  return toPublicUser(user);
+}
+
+module.exports = { getProfile, login, signup, updateProfile };
