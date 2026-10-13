@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import { AuthApiError, getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import {
   eventCategories,
   getEvents,
@@ -70,8 +72,8 @@ function formatPrice(pricePaise: string) {
 
 function EventCard({ event }: { event: CommunityEvent }) {
   return (
-    <article className="group overflow-hidden rounded-[1.35rem] border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)]">
-      <div className="relative h-52 overflow-hidden bg-[#eeedf8]">
+    <article className="group overflow-hidden rounded-xl border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)] sm:rounded-[1.35rem]">
+      <div className="relative h-32 overflow-hidden bg-[#eeedf8] sm:h-52">
         {/* Event images are supplied by the API and may come from arbitrary event hosts. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -81,33 +83,75 @@ function EventCard({ event }: { event: CommunityEvent }) {
           className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#14133d]/55 via-transparent to-black/5" />
-        <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-nest-ink shadow-sm backdrop-blur">
+        <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-nest-ink shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:px-3 sm:py-1.5 sm:text-xs">
           {event.category}
         </span>
-        <span className="absolute bottom-4 right-4 rounded-xl bg-white px-3 py-2 text-sm font-bold text-nest-ink shadow-lg">
+        <span className="absolute bottom-2 right-2 rounded-lg bg-white px-2 py-1.5 text-[11px] font-bold text-nest-ink shadow-lg sm:bottom-4 sm:right-4 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm">
           {formatPrice(event.pricePaise)}
         </span>
       </div>
-      <div className="p-5">
-        <p className="text-xs font-semibold tracking-wide text-[#6e6d82]">{formatEventDate(event.startsAt)}</p>
-        <h2 className="mt-2 line-clamp-1 text-lg font-bold tracking-[-0.025em] text-[#171717]">{event.title}</h2>
-        <div className="mt-2 flex items-center gap-1.5 text-sm text-[#666577]">
+      <div className="p-3 sm:p-5">
+        <p className="text-[10px] font-semibold tracking-wide text-[#6e6d82] sm:text-xs">{formatEventDate(event.startsAt)}</p>
+        <h2 className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 tracking-[-0.025em] text-[#171717] sm:mt-2 sm:line-clamp-1 sm:min-h-0 sm:text-lg sm:leading-normal">{event.title}</h2>
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#666577] sm:mt-2 sm:text-sm">
           <span className="text-nest-coral"><PinIcon /></span>
-          <span>{event.city}</span>
+          <span className="truncate">{event.city}</span>
         </div>
-        <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-[#656473]">{event.description}</p>
+        <p className="mt-2 line-clamp-3 min-h-[54px] text-[11px] leading-[18px] text-[#656473] sm:mt-3 sm:line-clamp-2 sm:min-h-10 sm:text-sm sm:leading-5">{event.description}</p>
       </div>
     </article>
   );
 }
 
 export default function EventBrowse() {
+  const router = useRouter();
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
   const [filters, setFilters] = useState(initialFilters);
   const [result, setResult] = useState<EventsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [account, setAccount] = useState<AuthUser | null>(null);
+  const [accountChecked, setAccountChecked] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadAccount() {
+      let token = '';
+      try {
+        token = window.localStorage.getItem('eventnest.accessToken') ?? '';
+      } catch {
+        // Continue as a visitor if local storage is blocked.
+      }
+
+      if (!token) {
+        if (active) setAccountChecked(true);
+        return;
+      }
+
+      try {
+        const user = await getCurrentUser(token, controller.signal);
+        if (!active) return;
+        setAccount(user);
+        if (!user.profileComplete) router.replace('/profile/setup');
+      } catch (requestError) {
+        if (!active || controller.signal.aborted) return;
+        if (requestError instanceof AuthApiError && requestError.status === 401) {
+          window.localStorage.removeItem('eventnest.accessToken');
+        }
+      } finally {
+        if (active) setAccountChecked(true);
+      }
+    }
+
+    void loadAccount();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,6 +196,16 @@ export default function EventBrowse() {
     setRetry((value) => value + 1);
   }
 
+  function logOut() {
+    try {
+      window.localStorage.removeItem('eventnest.accessToken');
+    } catch {
+      // Clear the visible signed-in state even if storage is unavailable.
+    }
+    setAccount(null);
+    router.replace('/events');
+  }
+
   const totalPages = result?.pagination.totalPages ?? 0;
   const hasFilters = Boolean(filters.category || filters.city || filters.q);
 
@@ -165,8 +219,29 @@ export default function EventBrowse() {
           </Link>
           <div className="flex items-center gap-3 sm:gap-5">
             <a href="#discover" className="hidden text-sm font-semibold text-white/85 transition hover:text-white sm:inline">Discover</a>
-            <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10 hover:text-white sm:px-4">Log in</Link>
-            <Link href="/signup" className="rounded-full bg-nest-coral px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-black/10 transition hover:bg-[#df0805] sm:px-5">Join free</Link>
+            {!accountChecked ? (
+              <span className="px-3 py-2 text-sm text-white/65" aria-live="polite">Loading account…</span>
+            ) : account ? (
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex max-w-[9rem] items-center gap-2 sm:max-w-none sm:gap-2.5">
+                  {account.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={account.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/30 object-cover" />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white" aria-hidden="true">
+                      {(account.username || account.email).slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="truncate text-sm font-semibold text-white">{account.username || account.email}</span>
+                </div>
+                <button onClick={logOut} className="rounded-full px-2 py-2 text-xs font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm">Log out</button>
+              </div>
+            ) : (
+              <>
+                <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10 hover:text-white sm:px-4">Log in</Link>
+                <Link href="/signup" className="rounded-full bg-nest-coral px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-black/10 transition hover:bg-[#df0805] sm:px-5">Join free</Link>
+              </>
+            )}
           </div>
         </nav>
       </header>
@@ -243,11 +318,11 @@ export default function EventBrowse() {
           </div>
 
           {loading && (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading events" aria-busy="true">
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3" aria-label="Loading events" aria-busy="true">
               {Array.from({ length: 6 }, (_, index) => (
-                <div key={index} className="overflow-hidden rounded-[1.35rem] border border-[#1e1d57]/8 bg-white">
-                  <div className="h-52 animate-pulse bg-[#eeedf4]" />
-                  <div className="space-y-3 p-5">
+                <div key={index} className="overflow-hidden rounded-xl border border-[#1e1d57]/8 bg-white sm:rounded-[1.35rem]">
+                  <div className="h-32 animate-pulse bg-[#eeedf4] sm:h-52" />
+                  <div className="space-y-3 p-3 sm:p-5">
                     <div className="h-3 w-28 animate-pulse rounded bg-[#eeedf4]" />
                     <div className="h-5 w-3/4 animate-pulse rounded bg-[#eeedf4]" />
                     <div className="h-3 w-1/2 animate-pulse rounded bg-[#eeedf4]" />
@@ -278,7 +353,7 @@ export default function EventBrowse() {
 
           {!loading && !error && result && result.data.length > 0 && (
             <>
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
                 {result.data.map((event) => <EventCard key={event.id} event={event} />)}
               </div>
               {totalPages > 1 && (
