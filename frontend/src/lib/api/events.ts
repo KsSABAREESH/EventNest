@@ -34,8 +34,9 @@ export type EventsFilters = {
 type ApiError = { message?: string };
 
 const eventsApiUrl = process.env.NEXT_PUBLIC_EVENTS_API_URL ?? 'http://localhost:4002';
+const preferencesApiUrl = process.env.NEXT_PUBLIC_PREFERENCES_API_URL ?? 'http://localhost:4003';
 
-export async function getEvents(filters: EventsFilters, signal?: AbortSignal): Promise<EventsPage> {
+export async function getEvents(filters: EventsFilters, signal?: AbortSignal, token?: string, myFeed = false): Promise<EventsPage> {
   const query = new URLSearchParams();
   if (filters.category) query.set('category', filters.category);
   if (filters.city.trim()) query.set('city', filters.city.trim());
@@ -45,7 +46,19 @@ export async function getEvents(filters: EventsFilters, signal?: AbortSignal): P
 
   let response: Response;
   try {
-    response = await fetch(`${eventsApiUrl}/events?${query.toString()}`, { signal });
+    if (myFeed && token) {
+      const feedQuery = new URLSearchParams();
+      if (filters.category) feedQuery.set('category', filters.category);
+      if (filters.city.trim()) feedQuery.set('city', filters.city.trim());
+      if (filters.q.trim()) feedQuery.set('q', filters.q.trim());
+      feedQuery.set('page', String(filters.page));
+      feedQuery.set('pageSize', String(filters.pageSize));
+      response = await fetch(`${preferencesApiUrl}/feed?${feedQuery.toString()}`, {
+        signal, headers: { authorization: `Bearer ${token}` },
+      });
+    } else {
+      response = await fetch(`${eventsApiUrl}/events?${query.toString()}`, { signal });
+    }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new Error('Could not connect to the events service. Check that it is running.');

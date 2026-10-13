@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
-import { AuthApiError, getCurrentUser, type AuthUser } from '@/lib/api/auth';
+import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategories, saveFavouriteCategories, saveProfile, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
 import {
   eventCategories,
   getEvents,
@@ -105,6 +105,7 @@ function EventCard({ event }: { event: CommunityEvent }) {
 
 export default function EventBrowse() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
   const [filters, setFilters] = useState(initialFilters);
   const [result, setResult] = useState<EventsPage | null>(null);
@@ -113,6 +114,12 @@ export default function EventBrowse() {
   const [retry, setRetry] = useState(0);
   const [account, setAccount] = useState<AuthUser | null>(null);
   const [accountChecked, setAccountChecked] = useState(false);
+  const [profilePromptOpen, setProfilePromptOpen] = useState(false);
+  const [profileStep, setProfileStep] = useState<'username' | 'categories'>('username');
+  const [profileUsername, setProfileUsername] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<FavouriteCategory[]>([]);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -135,7 +142,19 @@ export default function EventBrowse() {
         const user = await getCurrentUser(token, controller.signal);
         if (!active) return;
         setAccount(user);
-        if (!user.profileComplete) router.replace('/profile/setup');
+        if (!user.profileComplete) {
+          setProfileUsername(user.username ?? '');
+          setProfileStep('username');
+          setProfilePromptOpen(true);
+        } else if (user.role === 'member') {
+          const categories = await getFavouriteCategories(token, controller.signal);
+          if (!active) return;
+          setSelectedCategories(categories);
+          if (categories.length === 0) {
+            setProfileStep('categories');
+            setProfilePromptOpen(true);
+          }
+        }
       } catch (requestError) {
         if (!active || controller.signal.aborted) return;
         if (requestError instanceof AuthApiError && requestError.status === 401) {
@@ -154,8 +173,13 @@ export default function EventBrowse() {
   }, [router]);
 
   useEffect(() => {
+    if (!accountChecked) return;
     const controller = new AbortController();
-    getEvents(filters, controller.signal)
+    let token = '';
+    try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* visitor view */ }
+    const myFeed = searchParams.get('my_feed') === 'true' && account?.role === 'member' && Boolean(token);
+    if (searchParams.get('my_feed') === 'true' && !myFeed) router.replace('/events');
+    getEvents(filters, controller.signal, token, myFeed)
       .then((response) => setResult(response))
       .catch((requestError: unknown) => {
         if (!controller.signal.aborted) {
@@ -167,7 +191,7 @@ export default function EventBrowse() {
       });
 
     return () => controller.abort();
-  }, [filters, retry]);
+  }, [filters, retry, searchParams, accountChecked, account, router]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -206,8 +230,57 @@ export default function EventBrowse() {
     router.replace('/events');
   }
 
+  async function saveUsername(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProfileError('');
+    setProfileSaving(true);
+    try {
+      const token = window.localStorage.getItem('eventnest.accessToken');
+      if (!token) {
+        router.replace('/login');
+        return;
+      }
+      const user = await saveProfile(token, { username: profileUsername.trim() });
+      setAccount(user);
+      setProfileStep('categories');
+      setSelectedCategories([]);
+    } catch (requestError) {
+      setProfileError(requestError instanceof Error ? requestError.message : 'We could not save your name. Please try again.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function toggleFavourite(category: FavouriteCategory) {
+    setSelectedCategories((current) => current.includes(category)
+      ? current.filter((item) => item !== category)
+      : [...current, category]);
+  }
+
+  async function saveCategories(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProfileError('');
+    setProfileSaving(true);
+    try {
+      const token = window.localStorage.getItem('eventnest.accessToken');
+      if (!token) { router.replace('/login'); return; }
+      const saved = await saveFavouriteCategories(token, selectedCategories);
+      setSelectedCategories(saved);
+      setProfilePromptOpen(false);
+      router.replace('/events?my_feed=true');
+      setLoading(true);
+      setError('');
+      setRetry((value) => value + 1);
+    } catch (requestError) {
+      setProfileError(requestError instanceof Error ? requestError.message : 'We could not save your categories. Please try again.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   const totalPages = result?.pagination.totalPages ?? 0;
   const hasFilters = Boolean(filters.category || filters.city || filters.q);
+  const isMyFeed = searchParams.get('my_feed') === 'true' && Boolean(account);
 
   return (
     <div className="min-h-dvh bg-[#fbfaf8] text-[#171717]">
@@ -218,20 +291,16 @@ export default function EventBrowse() {
             <span>EventNest</span>
           </Link>
           <div className="flex items-center gap-3 sm:gap-5">
-            <a href="#discover" className="hidden text-sm font-semibold text-white/85 transition hover:text-white sm:inline">Discover</a>
+            <Link href="/events" className="text-sm font-semibold text-white/85 transition hover:text-white">Discover</Link>
+            {account?.role === 'member' && <Link href="/events?my_feed=true" className="text-sm font-semibold text-white/85 transition hover:text-white">My Feed</Link>}
             {!accountChecked ? (
               <span className="px-3 py-2 text-sm text-white/65" aria-live="polite">Loading account…</span>
             ) : account ? (
               <div className="flex items-center gap-2 sm:gap-4">
                 <div className="flex max-w-[9rem] items-center gap-2 sm:max-w-none sm:gap-2.5">
-                  {account.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={account.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/30 object-cover" />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white" aria-hidden="true">
-                      {(account.username || account.email).slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white" aria-hidden="true">
+                    {(account.username || account.email).slice(0, 1).toUpperCase()}
+                  </span>
                   <span className="truncate text-sm font-semibold text-white">{account.username || account.email}</span>
                 </div>
                 <button onClick={logOut} className="rounded-full px-2 py-2 text-xs font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm">Log out</button>
@@ -307,7 +376,7 @@ export default function EventBrowse() {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-nest-coral">Make it a day to remember</p>
-              <h2 id="upcoming-title" className="mt-1.5 text-2xl font-bold tracking-[-0.04em] text-nest-ink sm:text-[1.8rem]">Upcoming near you</h2>
+              <h2 id="upcoming-title" className="mt-1.5 text-2xl font-bold tracking-[-0.04em] text-nest-ink sm:text-[1.8rem]">{isMyFeed ? 'Your upcoming picks' : 'Upcoming near you'}</h2>
             </div>
             {!loading && !error && result && (
               <p className="text-sm font-medium text-[#767584]" aria-live="polite">
@@ -346,7 +415,7 @@ export default function EventBrowse() {
             <div className="rounded-3xl border border-[#1e1d57]/10 bg-white px-6 py-14 text-center shadow-sm sm:px-10">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1effb] text-2xl" aria-hidden="true">✦</div>
               <h3 className="mt-4 text-lg font-bold text-nest-ink">No events found just yet</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#666577]">Try another city or category. There may be something lovely just around the corner.</p>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#666577]">{isMyFeed ? 'There are no upcoming events in your favourite categories yet. Discover all events to find something new.' : 'Try another city or category. There may be something lovely just around the corner.'}</p>
               {hasFilters && <button onClick={clearFilters} className="mt-5 text-sm font-bold text-nest-coral underline underline-offset-4">Clear filters</button>}
             </div>
           )}
@@ -382,6 +451,54 @@ export default function EventBrowse() {
           <span>Find a little more community in your city.</span>
         </div>
       </footer>
+
+      {profilePromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#171638]/45 px-4 py-6 backdrop-blur-[3px]">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-prompt-title"
+            aria-describedby="profile-prompt-description"
+            className="w-full max-w-sm rounded-3xl border border-white/80 bg-white p-6 shadow-[0_28px_90px_rgba(18,17,55,0.3)] sm:p-8"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f1effb] text-xl text-nest-ink" aria-hidden="true">✦</span>
+            <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-nest-coral">{profileStep === 'username' ? 'Step 1 of 2 · A little introduction' : 'Step 2 of 2 · Personalize your feed'}</p>
+            <h2 id="profile-prompt-title" className="mt-1.5 text-2xl font-bold tracking-[-0.04em] text-nest-ink">{profileStep === 'username' ? 'How should we call you?' : 'What do you love?'}</h2>
+            <p id="profile-prompt-description" className="mt-2 text-sm leading-6 text-[#696879]">{profileStep === 'username' ? 'Choose the name we’ll show in your EventNest account.' : 'Choose your favourite event categories. Your feed will show upcoming events from these picks.'}</p>
+            {profileStep === 'username' ? (
+              <form onSubmit={saveUsername} className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="eventnest-username" className="mb-2 block text-sm font-semibold text-[#29283f]">Your name</label>
+                  <input
+                    id="eventnest-username" name="username" autoComplete="nickname" required minLength={2} maxLength={40}
+                    value={profileUsername} onChange={(event) => setProfileUsername(event.target.value)} placeholder="e.g. Saba"
+                    className="h-12 w-full rounded-xl border border-[#1e1d57]/15 px-4 text-sm text-[#171717] outline-none transition placeholder:text-[#9998a5] focus:border-nest-coral focus:ring-4 focus:ring-nest-coral/10"
+                  />
+                </div>
+                {profileError && <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-3.5 py-3 text-sm leading-5 text-[#b91c1c]">{profileError}</p>}
+                <button type="submit" disabled={profileSaving || profileUsername.trim().length < 2} className="flex h-12 w-full items-center justify-center rounded-xl bg-nest-coral px-5 text-sm font-bold text-white shadow-lg shadow-nest-coral/15 transition hover:bg-[#df0805] disabled:cursor-wait disabled:opacity-65">
+                  {profileSaving ? 'Saving…' : 'Next'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={saveCategories} className="mt-6 space-y-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {favouriteCategories.map((category) => {
+                    const selected = selectedCategories.includes(category);
+                    return <button key={category} type="button" aria-pressed={selected} onClick={() => toggleFavourite(category)} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${selected ? 'border-nest-coral bg-nest-coral/[0.07] text-[#c71d19]' : 'border-[#1e1d57]/15 bg-white text-[#555466] hover:border-nest-coral/50'}`}>
+                      <span aria-hidden="true" className="mr-2">{selected ? '✓' : '+'}</span>{category}
+                    </button>;
+                  })}
+                </div>
+                {profileError && <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-3.5 py-3 text-sm leading-5 text-[#b91c1c]">{profileError}</p>}
+                <button type="submit" disabled={profileSaving || selectedCategories.length === 0} className="flex h-12 w-full items-center justify-center rounded-xl bg-nest-coral px-5 text-sm font-bold text-white shadow-lg shadow-nest-coral/15 transition hover:bg-[#df0805] disabled:cursor-wait disabled:opacity-65">
+                  {profileSaving ? 'Saving…' : 'Save and continue'}
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

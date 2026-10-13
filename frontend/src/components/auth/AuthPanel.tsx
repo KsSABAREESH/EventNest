@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { submitCredentials } from '@/lib/api/auth';
 
-type AuthPanelProps = { mode: 'login' | 'signup' };
+type AuthPanelProps = { mode: 'login' | 'signup'; signupSuccess?: boolean };
 
 function NestMark() {
   return (
@@ -34,7 +34,7 @@ function EyeIcon({ visible }: { visible: boolean }) {
   );
 }
 
-export default function AuthPanel({ mode }: AuthPanelProps) {
+export default function AuthPanel({ mode, signupSuccess = false }: AuthPanelProps) {
   const router = useRouter();
   const isSignup = mode === 'signup';
   const [email, setEmail] = useState('');
@@ -58,6 +58,15 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
     setBusy(true);
     try {
       const result = await submitCredentials(mode, { email: email.trim(), password });
+      if (isSignup) {
+        try {
+          window.localStorage.removeItem('eventnest.accessToken');
+        } catch {
+          // The user still needs to sign in manually if storage is unavailable.
+        }
+        router.replace('/login?registered=true');
+        return;
+      }
       try {
         window.localStorage.setItem('eventnest.accessToken', result.accessToken);
       } catch {
@@ -70,7 +79,7 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
       );
       setPassword('');
       setConfirmPassword('');
-      router.replace(result.user.profileComplete ? '/events' : '/profile/setup');
+      router.replace('/events?my_feed=true');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {
@@ -198,6 +207,11 @@ export default function AuthPanel({ mode }: AuthPanelProps) {
             {errorMessage && (
               <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-4 py-3 text-sm leading-5 text-[#b91c1c]">
                 {errorMessage}
+              </p>
+            )}
+            {signupSuccess && !isSignup && (
+              <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-5 text-emerald-800">
+                Your account was created. Log in with your new email and password to continue.
               </p>
             )}
             {successMessage && (

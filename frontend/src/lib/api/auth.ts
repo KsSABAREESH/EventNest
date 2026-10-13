@@ -3,10 +3,11 @@ export type AuthUser = {
   email: string;
   role: 'member' | 'admin';
   username: string | null;
-  mobileNumber: string | null;
-  photoUrl: string | null;
   profileComplete: boolean;
 };
+
+export const favouriteCategories = ['Music', 'Workshop', 'Food', 'Sports', 'Kids'] as const;
+export type FavouriteCategory = (typeof favouriteCategories)[number];
 
 export type AuthResponse = {
   tokenType: 'Bearer';
@@ -78,7 +79,7 @@ export async function getCurrentUser(token: string, signal?: AbortSignal): Promi
 
 export async function saveProfile(
   token: string,
-  profile: { username: string; mobileNumber: string; photoUrl?: string },
+  profile: { username: string },
 ): Promise<AuthUser> {
   let response: Response;
   try {
@@ -98,4 +99,39 @@ export async function saveProfile(
   if (!response.ok) throw new AuthApiError(result.message ?? 'We could not save your profile.', response.status);
   if (!result.user) throw new Error('The server response was incomplete.');
   return result.user;
+}
+
+const preferencesApiUrl = process.env.NEXT_PUBLIC_PREFERENCES_API_URL ?? 'http://localhost:4003';
+
+export async function getFavouriteCategories(token: string, signal?: AbortSignal): Promise<FavouriteCategory[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${preferencesApiUrl}/preferences/favourites`, {
+      headers: { authorization: `Bearer ${token}` }, signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new Error('Could not reach EventNest preferences. Check that the preferences service is running.');
+  }
+  const result = (await response.json().catch(() => ({}))) as { data?: FavouriteCategory[] } & ApiErrorResponse;
+  if (!response.ok) throw new AuthApiError(result.message ?? 'We could not load your favourite categories.', response.status);
+  if (!Array.isArray(result.data)) throw new Error('The preferences service returned an incomplete response.');
+  return result.data;
+}
+
+export async function saveFavouriteCategories(token: string, categories: FavouriteCategory[]): Promise<FavouriteCategory[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${preferencesApiUrl}/preferences/favourites`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ categories }),
+    });
+  } catch {
+    throw new Error('Could not reach EventNest preferences. Check that the preferences service is running.');
+  }
+  const result = (await response.json().catch(() => ({}))) as { data?: FavouriteCategory[] } & ApiErrorResponse;
+  if (!response.ok) throw new AuthApiError(result.message ?? 'We could not save your favourite categories.', response.status);
+  if (!Array.isArray(result.data)) throw new Error('The preferences service returned an incomplete response.');
+  return result.data;
 }
