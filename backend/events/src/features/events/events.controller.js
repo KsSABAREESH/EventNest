@@ -1,2 +1,7 @@
-// HTTP request handlers for events.route.js are added with the events API implementation.
-module.exports = {};
+const eventsService = require('./events.service');
+
+async function browse(request) {
+  return eventsService.browseUpcoming(request.query);
+}
+
+module.exports = { browse };
