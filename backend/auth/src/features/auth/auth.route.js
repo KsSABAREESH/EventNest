@@ -10,6 +10,14 @@ const credentialsSchema = {
   },
 };
 
+const profileSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['username'],
+  properties: {
+    username: { type: 'string', minLength: 2, maxLength: 40 },
+  },
+};
 async function registerAuthRoutes(app) {
   app.post(
     '/signup',
@@ -30,6 +38,14 @@ async function registerAuthRoutes(app) {
   );
 
   app.get('/me', { preHandler: app.authenticate }, authController.me);
+  app.patch(
+    '/me/profile',
+    {
+      preHandler: app.authenticate,
+      schema: { body: profileSchema },
+    },
+    authController.updateProfile,
+  );
 }
 
 module.exports = registerAuthRoutes;

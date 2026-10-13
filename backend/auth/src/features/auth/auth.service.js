@@ -63,7 +63,13 @@ function normalizeEmail(email) {
 }
 
 function toPublicUser(user) {
-  return { id: user.id, email: user.email, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    username: user.username ?? null,
+    profileComplete: Boolean(user.username),
+  };
 }
 
 async function signup({ email: rawEmail, password }) {
@@ -91,7 +97,13 @@ async function login({ email: rawEmail, password }) {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (adminEmail && adminPassword && email === adminEmail && constantTimeStringEqual(password, adminPassword)) {
-    return { id: 'admin', email: adminEmail, role: 'admin' };
+    return {
+      id: 'admin',
+      email: adminEmail,
+      role: 'admin',
+      username: 'Admin',
+      profileComplete: true,
+    };
   }
 
   const user = await authModel.findUserByEmail(email);
@@ -106,4 +118,29 @@ async function login({ email: rawEmail, password }) {
   return toPublicUser(user);
 }
 
-module.exports = { login, signup };
+async function getProfile({ id, email, role }) {
+  if (role === 'admin' && id === 'admin') {
+    return { id, email, role, username: 'Admin', profileComplete: true };
+  }
+
+  const user = await authModel.findUserById(id);
+  if (!user) throw httpError(401, 'Your account could not be found. Please sign in again.', 'ACCOUNT_NOT_FOUND');
+  return toPublicUser(user);
+}
+
+async function updateProfile({ id, role }, { username: rawUsername }) {
+  if (role !== 'member') {
+    throw httpError(403, 'This profile cannot be updated.', 'PROFILE_UPDATE_FORBIDDEN');
+  }
+
+  const username = rawUsername.trim();
+  if (username.length < 2 || username.length > 40) {
+    throw httpError(400, 'Username must be between 2 and 40 characters.', 'INVALID_USERNAME');
+  }
+
+  const user = await authModel.updateUserProfile({ id, username });
+  if (!user) throw httpError(401, 'Your account could not be found. Please sign in again.', 'ACCOUNT_NOT_FOUND');
+  return toPublicUser(user);
+}
+
+module.exports = { getProfile, login, signup, updateProfile };

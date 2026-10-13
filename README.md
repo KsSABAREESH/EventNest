@@ -4,7 +4,7 @@ EventNest is a community events board. The repository is an npm workspace with a
 
 ## Current progress
 
-The auth service provides signup, login, and token-protected identity endpoints. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. Event administration and the visitor preference APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
+The auth service provides signup, login, token-protected profile endpoints, and first-login profile completion. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. The preferences service saves favourite categories and serves each member's upcoming personalized feed. Event administration, reminders, and card design APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
 
 ## Requirements
 
@@ -53,7 +53,7 @@ Backend feature modules use `feature.route.js`, `feature.controller.js`, `featur
 
 ## Database structure
 
-- `users` stores normalized email addresses, password hashes, and member/admin roles.
+- `users` stores normalized email addresses, password hashes, member/admin roles, and an optional username. A member completes the first-login profile prompt when a username is set.
 - `events` stores event details, category, city, timezone-aware start time, integer paise price, active state, optional seed key, and a generated text-search document. A database trigger rejects event deletion; admins will deactivate events instead.
 - `user_favourite_categories` stores a unique category per user.
 - `event_reminders` stores one reminder per user and event.
@@ -69,9 +69,10 @@ Auth endpoints run on port 4001:
 | --- | --- | --- |
 | `POST` | `/auth/signup` | Create a member account and return a bearer access token. |
 | `POST` | `/auth/login` | Log in a member or the configured admin and return a bearer access token. |
-| `GET` | `/auth/me` | Return the current identity; requires `Authorization: Bearer <token>`. |
+| `GET` | `/auth/me` | Return the current identity and profile-completion status; requires `Authorization: Bearer <token>`. |
+| `PATCH` | `/auth/me/profile` | Save a username; requires a bearer token. |
 
-Signup and login accept JSON `{ "email": "person@example.com", "password": "at-least-8-characters" }`. Access tokens expire after one hour. Signup is limited to five requests per minute per process, and login to ten. Passwords are stored as salted `scrypt` hashes; the admin account is configured through environment variables and cannot be registered as a member. JWT signing uses `JWT_SECRET`, and `/auth/me` verifies the signature, issuer, and expiry. Admin event management and the visitor preference APIs remain to be implemented. The event browse indexes support upcoming date ordering, optional category/city filters, and full-text search.
+Signup and login accept JSON `{ "email": "person@example.com", "password": "at-least-8-characters" }`. Access tokens expire after one hour. Signup is limited to five requests per minute per process, and login to ten. Passwords are stored as salted `scrypt` hashes; the admin account is configured through environment variables and cannot be registered as a member. JWT signing uses `JWT_SECRET`, and `/auth/me` verifies the signature, issuer, and expiry. After their first manual login, new members are asked for a username and favourite categories. The personalized feed uses those categories; a visitor can still discover the full event catalog without logging in. Event browse indexes support upcoming date ordering, optional category/city filters, and full-text search.
 
 Events endpoints run on port 4002:
 
@@ -80,6 +81,14 @@ Events endpoints run on port 4002:
 | `GET` | `/events` | Browse active, upcoming events with optional `category`, `city`, `q`, `page`, and `pageSize` query parameters. |
 
 The filters combine with AND. Text search covers event title, city, and description. Results are ordered by nearest event first. Pagination defaults to 12 events per page and allows up to 50. The endpoint returns `data` and `pagination` fields; event prices are integer paise values in `pricePaise`.
+
+Preferences endpoints run on port 4003 and require a member bearer token:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/preferences/favourites` | Get the signed-in member's favourite categories. |
+| `PUT` | `/preferences/favourites` | Replace favourite categories with `{ "categories": ["Music", "Food"] }`. |
+| `GET` | `/feed` | Browse upcoming active events from favourite categories. Accepts the same category, city, text, and pagination filters as `/events`. |
 
 ## Demo recording
 
