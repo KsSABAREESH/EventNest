@@ -4,7 +4,7 @@ EventNest is a community events board. The repository is an npm workspace with a
 
 ## Current progress
 
-The auth service provides signup, login, token-protected profile endpoints, and first-login profile completion. The events service provides public browsing of active, upcoming events with combined category, city, and text filters plus pagination. The preferences service saves favourite categories, serves each member's upcoming personalized feed, and stores event reminders. Event administration and card design APIs are still to be implemented. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
+The auth service provides signup, login, profile completion, and admin authentication. The events service provides public and personalized event browsing plus protected event administration. The preferences service stores favourite categories, reminders, and per-event card designs. Each API service exposes `GET /health` for liveness and `GET /ready` for PostgreSQL readiness.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-Before starting the auth service, replace the `JWT_SECRET` and `ADMIN_PASSWORD` placeholders in `backend/.env`. Use a random JWT secret with at least 32 characters and an admin password with at least 12 characters. The configured `ADMIN_EMAIL` and `ADMIN_PASSWORD` are the admin login credentials.
+Before starting the auth service, replace the `JWT_SECRET` and `ADMIN_PASSWORD` placeholders in `backend/.env`. Use a random JWT secret with at least 32 characters and an admin password with at least 12 characters. The default admin email is `admin@eventnest.local`; the password is the value you set as `ADMIN_PASSWORD` in that file. Sign in at `/admin/login`.
 
 The seed can be run again safely; it upserts the same 15 sample events and uses dates relative to the current day.
 
@@ -94,6 +94,43 @@ Preferences endpoints run on port 4003 and require a member bearer token:
 | `PUT` | `/reminders/:eventId` | Save a reminder for an upcoming active event. |
 | `DELETE` | `/reminders/:eventId` | Remove a saved reminder. |
 
+Card design endpoints also run on port 4003 and require a member bearer token:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/events/:eventId/card-design` | Read the member's saved theme and stickers for one event. |
+| `PUT` | `/events/:eventId/card-design` | Save one of three themes and up to three stickers for that event. |
+| `GET` | `/card-designs?eventIds=...` | Read saved designs for a page of event cards. |
+
+Admin endpoints require an admin JWT. The Next.js admin pages use server-side route handlers and an HTTP-only session cookie:
+
+| Service | Method and path | Purpose |
+| --- | --- | --- |
+| Auth (4001) | `POST /auth/admin/login`, `GET /auth/admin/me` | Create and validate the configured admin session. |
+| Events (4002) | `GET /admin/events`, `POST /admin/events`, `PATCH /admin/events/:eventId`, `PATCH /admin/events/:eventId/status` | Search, create, update, activate, and deactivate events. Events are never deleted. |
+| Auth (4001) | `GET /auth/admin/users`, `GET /auth/admin/users/:userId` | List member accounts and inspect a member profile. |
+| Preferences (4003) | `GET /admin/users/:userId/favourites` | Read a member's favourite categories. |
+
+## Required short answers
+
+### Database structure and reason
+
+`users` stores normalized accounts and password hashes; `events` stores event details, status, price, date, and search text.
+`user_favourite_categories` and `event_reminders` link members to their interests and saved events; `event_card_designs` stores one theme and sticker list per member/event pair.
+Foreign keys and unique constraints prevent invalid or duplicate rows; prices are integer paise and events are deactivated instead of deleted.
+
+### Filter query and index
+
+The events query combines active/upcoming conditions with optional category, case-insensitive city, and full-text search predicates using `AND`.
+It sorts by start time and applies `LIMIT`/`OFFSET` pagination, while the feed adds the member's saved category set.
+Partial B-tree indexes support date/category/city filters; a GIN index supports text search. `pg_trgm` indexes could speed up admin substring search.
+
+### Passwords and admin protection
+
+Member passwords are stored as salted `scrypt` hashes; login issues a signed, expiring JWT. Admin credentials come from environment variables, not a member row.
+Admin APIs verify the admin role on the server, and admin pages check the session before rendering.
+The Next.js server routes use an HTTP-only, same-site cookie when proxying admin requests to the Fastify services.
+
 ## Demo recording
 
-The requested 3-4 minute phone and laptop walkthrough will be recorded after the user-facing flows are complete.
+Record a 3–4 minute walkthrough showing the app at phone and laptop sizes, then explain two or three implementation choices in your own words. The recording is not included in this repository yet.

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
+import { useToast } from '@/components/ui/ToastProvider';
 import { AuthApiError, getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import { getReminderEvents, saveEventReminder } from '@/lib/api/reminders';
 import { getEventCardDesigns, type EventCardDesign } from '@/lib/api/card-design';
@@ -26,6 +27,7 @@ function formatPrice(value: string) {
 
 export default function WishlistPage() {
   const router = useRouter();
+  const toast = useToast();
   const [account, setAccount] = useState<AuthUser | null>(null);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
@@ -103,7 +105,7 @@ export default function WishlistPage() {
       await saveEventReminder(token, event.id, false);
     } catch (requestError) {
       setEvents((current) => [...current, event].sort((a, b) => a.startsAt.localeCompare(b.startsAt)));
-      setError(requestError instanceof Error ? requestError.message : 'We could not remove that event. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not remove that event. Please try again.');
     } finally {
       setPendingIds((current) => {
         const next = new Set(current);

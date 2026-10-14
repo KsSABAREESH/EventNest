@@ -94,12 +94,7 @@ export default function Dropdown<Value extends string>({
         onKeyDown={handleTriggerKeyDown}
         className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border bg-white px-3.5 text-left text-sm transition focus:outline-none focus:ring-4 ${open ? 'border-nest-coral ring-4 ring-nest-coral/10' : 'border-[#1e1d57]/15 hover:border-[#1e1d57]/35 focus:border-nest-coral focus:ring-nest-coral/10'}`}
       >
-        <span className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f2fa] text-nest-ink">
-            {selectedOption?.icon ?? <span aria-hidden="true" className="text-xs">⌕</span>}
-          </span>
-          <span id={`${id}-value`} className="truncate font-semibold text-nest-ink">{selectedOption?.label ?? 'Choose an option'}</span>
-        </span>
+        <span id={`${id}-value`} className="min-w-0 flex-1 truncate font-semibold text-nest-ink">{selectedOption?.label ?? 'Choose an option'}</span>
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={`h-4 w-4 shrink-0 text-[#777687] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
           <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -129,11 +124,8 @@ export default function Dropdown<Value extends string>({
                   setOpen(false);
                   triggerRef.current?.focus();
                 }}
-                className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition ${selected ? 'bg-[#f4f2fb]' : 'hover:bg-[#faf9fc] focus:bg-[#faf9fc]'} focus:outline-none`}
+                className={`flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition ${selected ? 'bg-[#f4f2fb]' : 'hover:bg-[#faf9fc] focus:bg-[#faf9fc]'} focus:outline-none`}
               >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${selected ? 'bg-white text-nest-coral shadow-sm' : 'bg-[#f3f2fa] text-nest-ink'}`}>
-                  {option.icon ?? <span aria-hidden="true" className="text-xs">⌕</span>}
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-nest-ink">{option.label}</span>
                   {option.description && <span className="mt-0.5 block truncate text-[11px] text-[#777687]">{option.description}</span>}
