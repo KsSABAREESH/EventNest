@@ -7,7 +7,9 @@ import { useEffect, useState } from 'react';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
 import { AuthApiError, getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import { getReminderEvents, saveEventReminder } from '@/lib/api/reminders';
+import { getEventCardDesigns, type EventCardDesign } from '@/lib/api/card-design';
 import type { CommunityEvent } from '@/lib/api/events';
+import { CardStickerOverlay, cardMutedTextClass, cardSurfaceClass } from '@/components/events/PersonalizedCardDesign';
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-IN', {
@@ -27,8 +29,10 @@ export default function WishlistPage() {
   const [account, setAccount] = useState<AuthUser | null>(null);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [cardDesigns, setCardDesigns] = useState<Record<string, EventCardDesign>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cardDesignError, setCardDesignError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,6 +55,20 @@ export default function WishlistPage() {
         const savedEvents = await getReminderEvents(token, controller.signal);
         if (!active) return;
         setEvents(savedEvents);
+        try {
+          const designs = await getEventCardDesigns(savedEvents.map((event) => event.id), token, controller.signal);
+          if (active) {
+            const byEventId: Record<string, EventCardDesign> = {};
+            for (const { eventId, ...design } of designs) byEventId[eventId] = design;
+            setCardDesigns(byEventId);
+            setCardDesignError('');
+          }
+        } catch (designError) {
+          // Wishlist events remain available if the personalization service is offline.
+          if (active && !controller.signal.aborted) {
+            setCardDesignError(designError instanceof Error ? designError.message : 'Saved card designs could not be loaded.');
+          }
+        }
       } catch (requestError) {
         if (!active || controller.signal.aborted) return;
         if (requestError instanceof AuthApiError && requestError.status === 401) {
@@ -103,6 +121,7 @@ export default function WishlistPage() {
         <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] text-nest-ink sm:text-4xl">Wishlist</h1>
         <p className="mt-3 max-w-xl text-sm leading-6 text-[#666577]">Events you have saved with Remind me will be kept here.</p>
 
+        {cardDesignError && <div role="status" className="mt-5 rounded-2xl border border-[#1e1d57]/10 bg-white px-4 py-3 text-sm text-[#666577] shadow-sm">Your saved card designs could not be shown. {cardDesignError}</div>}
         {error && <div role="alert" className="mt-6 rounded-2xl border border-nest-coral/20 bg-white px-4 py-3 text-sm text-[#a92622] shadow-sm">{error}</div>}
 
         {loading ? (
@@ -119,20 +138,21 @@ export default function WishlistPage() {
         ) : !loading && events.length > 0 ? (
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
             {events.map((event) => (
-              <article key={event.id} className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)]">
+              <article key={event.id} className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border shadow-[0_8px_32px_rgba(30,29,87,0.055)] ${cardDesigns[event.id] ? cardSurfaceClass(cardDesigns[event.id].theme) : 'border-[#1e1d57]/10 bg-white text-[#171717]'}`}>
                 <div className="relative h-48 bg-[#eeedf8]">
                   {/* Event photos are provided by the events API and may be hosted by any event image provider. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={event.imageUrl} alt={event.title} loading="lazy" className="h-full w-full object-cover" />
                   <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-nest-ink shadow-sm">{event.category}</span>
+                  {cardDesigns[event.id] && <CardStickerOverlay stickers={cardDesigns[event.id].stickers} />}
                 </div>
                 <div className="flex flex-1 flex-col p-5">
-                  <p className="text-xs font-semibold text-[#6e6d82]">{formatDate(event.startsAt)}</p>
-                  <h2 className="mt-2 line-clamp-2 text-lg font-bold tracking-[-0.025em] text-[#171717]">{event.title}</h2>
-                  <p className="mt-1 text-sm text-[#666577]">{event.city}</p>
-                  <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-[#656473]">{event.description}</p>
+                  <p className={`text-xs font-semibold ${cardMutedTextClass(cardDesigns[event.id]?.theme)}`}>{formatDate(event.startsAt)}</p>
+                  <h2 className="mt-2 line-clamp-2 text-lg font-bold tracking-[-0.025em]">{event.title}</h2>
+                  <p className={`mt-1 text-sm ${cardMutedTextClass(cardDesigns[event.id]?.theme)}`}>{event.city}</p>
+                  <p className={`mt-3 line-clamp-2 min-h-10 text-sm leading-5 ${cardMutedTextClass(cardDesigns[event.id]?.theme)}`}>{event.description}</p>
                   <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-                    <span className="truncate text-sm font-bold text-nest-ink">{formatPrice(event.pricePaise)}</span>
+                    <span className={`truncate text-sm font-bold ${cardDesigns[event.id]?.theme === 'sunset' || cardDesigns[event.id]?.theme === 'midnight' ? 'text-white' : 'text-nest-ink'}`}>{formatPrice(event.pricePaise)}</span>
                     <button type="button" onClick={() => void removeFromWishlist(event)} disabled={pendingIds.has(event.id)} className="shrink-0 rounded-xl border border-[#1e1d57]/15 px-3 py-2 text-xs font-bold text-nest-ink transition hover:border-nest-coral hover:text-nest-coral disabled:cursor-wait disabled:opacity-60">
                       {pendingIds.has(event.id) ? 'Removing…' : 'Remove'}
                     </button>

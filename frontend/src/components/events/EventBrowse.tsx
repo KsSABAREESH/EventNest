@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategories, saveFavouriteCategories, saveProfile, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
 import { getReminderEventIds, saveEventReminder } from '@/lib/api/reminders';
+import { getEventCardDesigns, type EventCardDesign } from '@/lib/api/card-design';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
+import { CardStickerOverlay, cardMutedTextClass, cardSurfaceClass } from '@/components/events/PersonalizedCardDesign';
 import {
   eventCategories,
   getEvents,
@@ -64,19 +66,24 @@ function formatPrice(pricePaise: string) {
 
 function EventCard({
   event,
+  design,
   reminded,
   pending,
   onToggleReminder,
+  dataEventCard = false,
   className = '',
 }: {
   event: CommunityEvent;
+  design?: EventCardDesign;
   reminded: boolean;
   pending: boolean;
   onToggleReminder: (eventId: string) => void;
+  dataEventCard?: boolean;
   className?: string;
 }) {
+  const mutedTextClass = cardMutedTextClass(design?.theme);
   return (
-    <article className={`group flex flex-col overflow-hidden rounded-xl border border-[#1e1d57]/10 bg-white shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)] sm:rounded-[1.35rem] ${className}`}>
+    <article data-event-card={dataEventCard ? 'true' : undefined} className={`group flex flex-col overflow-hidden rounded-xl border shadow-[0_8px_32px_rgba(30,29,87,0.055)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(30,29,87,0.12)] sm:rounded-[1.35rem] ${design ? cardSurfaceClass(design.theme) : 'border-[#1e1d57]/10 bg-white text-[#171717]'} ${className}`}>
       <div className="relative h-[clamp(10rem,48vw,16rem)] overflow-hidden bg-[#eeedf8] sm:h-52">
         {/* Event images are supplied by the API and may come from arbitrary event hosts. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,17 +97,18 @@ function EventCard({
         <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-nest-ink shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:px-3 sm:py-1.5 sm:text-xs">
           {event.category}
         </span>
+        {design && <CardStickerOverlay stickers={design.stickers} />}
       </div>
       <div className="flex flex-1 flex-col p-3 sm:p-5">
-        <p className="text-[10px] font-semibold tracking-wide text-[#6e6d82] sm:text-xs">{formatEventDate(event.startsAt)}</p>
-        <h2 className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 tracking-[-0.025em] text-[#171717] sm:mt-2 sm:line-clamp-1 sm:min-h-0 sm:text-lg sm:leading-normal">{event.title}</h2>
-        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#666577] sm:mt-2 sm:text-sm">
+        <p className={`text-[10px] font-semibold tracking-wide sm:text-xs ${mutedTextClass}`}>{formatEventDate(event.startsAt)}</p>
+        <h2 className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 tracking-[-0.025em] sm:mt-2 sm:line-clamp-1 sm:min-h-0 sm:text-lg sm:leading-normal">{event.title}</h2>
+        <div className={`mt-1.5 flex items-center gap-1.5 text-xs sm:mt-2 sm:text-sm ${mutedTextClass}`}>
           <span className="text-nest-coral"><PinIcon /></span>
           <span className="truncate">{event.city}</span>
         </div>
-        <p className="mt-2 line-clamp-3 min-h-[54px] text-[11px] leading-[18px] text-[#656473] sm:mt-3 sm:line-clamp-2 sm:min-h-10 sm:text-sm sm:leading-5">{event.description}</p>
+        <p className={`mt-2 line-clamp-3 min-h-[54px] text-[11px] leading-[18px] sm:mt-3 sm:line-clamp-2 sm:min-h-10 sm:text-sm sm:leading-5 ${mutedTextClass}`}>{event.description}</p>
         <div className="mt-auto flex items-center justify-between gap-2 pt-3 sm:pt-4">
-          <span className="min-w-0 truncate text-xs font-bold text-nest-ink sm:text-sm">{formatPrice(event.pricePaise)}</span>
+          <span className={`min-w-0 truncate text-xs font-bold sm:text-sm ${design?.theme === 'sunset' || design?.theme === 'midnight' ? 'text-white' : 'text-nest-ink'}`}>{formatPrice(event.pricePaise)}</span>
           <button
             type="button"
             onClick={() => onToggleReminder(event.id)}
@@ -136,8 +144,41 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
   const [remindedEventIds, setRemindedEventIds] = useState<Set<string>>(() => new Set());
   const [pendingReminderIds, setPendingReminderIds] = useState<Set<string>>(() => new Set());
   const [reminderMessage, setReminderMessage] = useState('');
+  const [cardDesigns, setCardDesigns] = useState<Record<string, EventCardDesign>>({});
+  const [cardDesignMessage, setCardDesignMessage] = useState('');
+  const eventCarouselRef = useRef<HTMLDivElement>(null);
+  const [canScrollEventsLeft, setCanScrollEventsLeft] = useState(false);
+  const [canScrollEventsRight, setCanScrollEventsRight] = useState(false);
   const viewKey = myFeedRequested ? 'myFeed' : 'discover';
   const activeFilters = { ...filters, page: pageByView[viewKey] };
+
+  const updateEventCarouselControls = useCallback(() => {
+    const carousel = eventCarouselRef.current;
+    if (!carousel) return;
+    const maxScrollLeft = carousel.scrollWidth - carousel.clientWidth;
+    setCanScrollEventsLeft(carousel.scrollLeft > 2);
+    setCanScrollEventsRight(maxScrollLeft - carousel.scrollLeft > 2);
+  }, []);
+
+  function scrollEventsByCard(direction: -1 | 1) {
+    const carousel = eventCarouselRef.current;
+    const card = carousel?.querySelector<HTMLElement>('[data-event-card]');
+    if (!carousel || !card) return;
+    const row = card.parentElement;
+    const gap = row ? Number.parseFloat(window.getComputedStyle(row).columnGap) || 0 : 0;
+    carousel.scrollBy({ left: direction * (card.getBoundingClientRect().width + gap), behavior: 'smooth' });
+  }
+
+  useEffect(() => {
+    const carousel = eventCarouselRef.current;
+    if (!carousel) return;
+    carousel.scrollLeft = 0;
+    updateEventCarouselControls();
+    const observer = new ResizeObserver(updateEventCarouselControls);
+    observer.observe(carousel);
+    if (carousel.firstElementChild) observer.observe(carousel.firstElementChild);
+    return () => observer.disconnect();
+  }, [result, loading, updateEventCarouselControls]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -223,6 +264,44 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
 
     return () => controller.abort();
   }, [filters, pageByView[viewKey], retry, myFeedRequested, accountChecked, account, router]);
+
+  useEffect(() => {
+    if (!result?.data.length || account?.role !== 'member') {
+      setCardDesigns({});
+      setCardDesignMessage('');
+      return;
+    }
+    const controller = new AbortController();
+    let active = true;
+    let token = '';
+    try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* show standard cards */ }
+    if (!token) {
+      setCardDesigns({});
+      setCardDesignMessage('');
+      return () => controller.abort();
+    }
+    setCardDesigns({});
+    setCardDesignMessage('');
+    getEventCardDesigns(result.data.map((event) => event.id), token, controller.signal)
+      .then((designs) => {
+        if (active) {
+          const byEventId: Record<string, EventCardDesign> = {};
+          for (const { eventId, ...design } of designs) byEventId[eventId] = design;
+          setCardDesigns(byEventId);
+        }
+      })
+      .catch((designError: unknown) => {
+        // Personalization is optional for browsing; keep event cards usable if the service is offline.
+        if (active && !controller.signal.aborted) {
+          setCardDesigns({});
+          setCardDesignMessage(designError instanceof Error ? designError.message : 'Saved card designs could not be loaded.');
+        }
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [result, account]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -356,6 +435,11 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
             <button type="button" onClick={() => setReminderMessage('')} aria-label="Dismiss message" className="shrink-0 rounded-lg px-2 py-1 font-bold text-[#a92622] hover:bg-nest-coral/10">×</button>
           </div>
         )}
+        {cardDesignMessage && (
+          <div role="status" className="mb-5 rounded-2xl border border-[#1e1d57]/10 bg-white px-4 py-3 text-sm text-[#666577] shadow-sm">
+            Your saved card designs could not be shown. {cardDesignMessage}
+          </div>
+        )}
         <section className="relative w-full min-w-0 overflow-hidden rounded-[2rem] bg-[#f1effb] px-5 py-8 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
           <div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full border-[44px] border-white/45" />
           <div className="pointer-events-none absolute -bottom-36 right-[22%] h-72 w-72 rounded-full bg-[#ff0905]/[0.045]" />
@@ -419,10 +503,20 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
               <h2 id="upcoming-title" className="mt-1.5 text-2xl font-bold tracking-[-0.04em] text-nest-ink sm:text-[1.8rem]">{isMyFeed ? 'Your upcoming picks' : 'Upcoming near you'}</h2>
             </div>
             {!loading && !error && result && (
-              <p className="text-sm font-medium text-[#767584]" aria-live="polite">
-                {result.pagination.totalItems} {result.pagination.totalItems === 1 ? 'event' : 'events'}
-                {hasFilters ? ' found' : ' to explore'}
-              </p>
+              <div className="ml-auto flex items-center gap-3">
+                <p className="text-sm font-medium text-[#767584]" aria-live="polite">
+                  {result.pagination.totalItems} {result.pagination.totalItems === 1 ? 'event' : 'events'}
+                  {hasFilters ? ' found' : ' to explore'}
+                </p>
+                {result.data.length > 1 && <div className="flex gap-1.5 sm:hidden" aria-label="Scroll through events">
+                  <button type="button" aria-label="Show previous event" disabled={!canScrollEventsLeft} onClick={() => scrollEventsByCard(-1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#1e1d57]/15 bg-white text-nest-ink shadow-sm transition hover:border-nest-coral hover:text-nest-coral disabled:cursor-not-allowed disabled:opacity-35">
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4"><path d="m12.5 4.5-5.5 5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                  <button type="button" aria-label="Show next event" disabled={!canScrollEventsRight} onClick={() => scrollEventsByCard(1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#1e1d57]/15 bg-white text-nest-ink shadow-sm transition hover:border-nest-coral hover:text-nest-coral disabled:cursor-not-allowed disabled:opacity-35">
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4"><path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                </div>}
+              </div>
             )}
           </div>
 
@@ -476,12 +570,14 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
 
           {!loading && !error && result && result.data.length > 0 && (
             <>
-              <div className="-mx-5 snap-x snap-mandatory overflow-x-auto scroll-smooth px-0 pb-3 sm:mx-0 sm:snap-none sm:overflow-visible" role="region" tabIndex={0} aria-label="Upcoming events, scroll horizontally to see more">
+              <div ref={eventCarouselRef} onScroll={updateEventCarouselControls} className="-mx-5 snap-x snap-mandatory overflow-x-auto scroll-smooth px-0 pb-3 sm:mx-0 sm:snap-none sm:overflow-visible" role="region" tabIndex={0} aria-label="Upcoming events, scroll horizontally to see more">
                 <div className="flex w-max gap-3 px-5 sm:grid sm:w-auto sm:grid-cols-2 sm:gap-5 sm:px-0 lg:grid-cols-3">
                 {result.data.map((event) => (
                   <EventCard
                     key={event.id}
+                    dataEventCard
                     event={event}
+                    design={cardDesigns[event.id]}
                     reminded={remindedEventIds.has(event.id)}
                     pending={pendingReminderIds.has(event.id)}
                     onToggleReminder={toggleReminder}
