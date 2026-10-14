@@ -119,6 +119,7 @@ export default function EventsNavbar({
                   <>
                     <button type="button" disabled aria-disabled="true" title="Bookings are not available yet" className="block w-full cursor-not-allowed rounded-xl px-4 py-3 text-left text-sm font-medium text-[#9998a5]">My bookings</button>
                     <Link href="/preferences" onClick={() => setMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">My preferences</Link>
+                    {account.role === 'member' && <Link href="/personalize" onClick={() => setMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Personalize</Link>}
                     <Link href="/wishlist" onClick={() => setMenuOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-[#f1effb]">Wishlist</Link>
                     <div className="my-1 border-t border-[#1e1d57]/10" />
                     <button type="button" onClick={logout} className="block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#b42320] transition hover:bg-[#fff1f0]">Log out</button>
