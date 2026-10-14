@@ -1,4 +1,4 @@
-const { createApp } = require('@eventnest/shared');
+const { createApp, registerAuthGuards } = require('@eventnest/shared');
 const jwt = require('@fastify/jwt');
 const registerFavouriteRoutes = require('./features/favourites/favourites.route');
 const registerFeedRoutes = require('./features/feed/feed.route');
@@ -14,13 +14,7 @@ function buildApp() {
     secret: process.env.JWT_SECRET,
     verify: { allowedIss: 'eventnest' },
   });
-  app.decorate('authenticate', async function authenticate(request, reply) {
-    try {
-      await request.jwtVerify();
-    } catch {
-      return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'A valid bearer token is required.', requestId: request.id });
-    }
-  });
+  registerAuthGuards(app);
   app.register(registerFavouriteRoutes, { prefix: '/preferences/favourites' });
   app.register(registerFeedRoutes, { prefix: '/feed' });
   app.register(registerReminderRoutes, { prefix: '/reminders' });

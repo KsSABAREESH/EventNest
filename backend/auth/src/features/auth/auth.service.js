@@ -93,19 +93,6 @@ async function signup({ email: rawEmail, password }) {
 
 async function login({ email: rawEmail, password }) {
   const email = normalizeEmail(rawEmail);
-  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD;
-
-  if (adminEmail && adminPassword && email === adminEmail && constantTimeStringEqual(password, adminPassword)) {
-    return {
-      id: 'admin',
-      email: adminEmail,
-      role: 'admin',
-      username: 'Admin',
-      profileComplete: true,
-    };
-  }
-
   const user = await authModel.findUserByEmail(email);
   const passwordValid = user
     ? await verifyPassword(password, user.password_hash)
@@ -116,6 +103,25 @@ async function login({ email: rawEmail, password }) {
   }
 
   return toPublicUser(user);
+}
+
+async function loginAdmin({ email: rawEmail, password }) {
+  const email = normalizeEmail(rawEmail);
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? '';
+  const adminPassword = process.env.ADMIN_PASSWORD ?? '';
+  const emailMatches = constantTimeStringEqual(email, adminEmail);
+  const passwordMatches = constantTimeStringEqual(password, adminPassword);
+
+  if (!emailMatches || !passwordMatches || !adminEmail || !adminPassword) {
+    throw httpError(401, 'Email or password is incorrect.', 'INVALID_CREDENTIALS');
+  }
+  return {
+    id: 'admin',
+    email: adminEmail,
+    role: 'admin',
+    username: 'Admin',
+    profileComplete: true,
+  };
 }
 
 async function getProfile({ id, email, role }) {
@@ -143,4 +149,4 @@ async function updateProfile({ id, role }, { username: rawUsername }) {
   return toPublicUser(user);
 }
 
-module.exports = { getProfile, login, signup, updateProfile };
+module.exports = { getProfile, login, loginAdmin, signup, updateProfile };

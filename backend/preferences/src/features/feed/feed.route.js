@@ -2,7 +2,7 @@ const feedController = require('./feed.controller');
 
 async function registerFeedRoutes(app) {
   app.get('/', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: { querystring: {
       type: 'object', additionalProperties: false,
       properties: {
