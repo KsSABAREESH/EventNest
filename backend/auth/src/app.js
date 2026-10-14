@@ -1,7 +1,8 @@
-const { createApp, loadEnvironment } = require('@eventnest/shared');
+const { createApp, loadEnvironment, registerAuthGuards } = require('@eventnest/shared');
 const jwt = require('@fastify/jwt');
 const rateLimit = require('@fastify/rate-limit');
 const registerAuthRoutes = require('./features/auth/auth.route');
+const registerAdminRoutes = require('./features/admin/admin.route');
 
 function buildApp() {
   loadEnvironment();
@@ -23,18 +24,9 @@ function buildApp() {
     verify: { allowedIss: 'eventnest' },
   });
   app.register(rateLimit, { global: false });
-  app.decorate('authenticate', async function authenticate(request, reply) {
-    try {
-      await request.jwtVerify();
-    } catch {
-      return reply.code(401).send({
-        error: 'UNAUTHORIZED',
-        message: 'A valid bearer token is required.',
-        requestId: request.id,
-      });
-    }
-  });
+  registerAuthGuards(app);
   app.register(registerAuthRoutes, { prefix: '/auth' });
+  app.register(registerAdminRoutes, { prefix: '/auth/admin' });
   return app;
 }
 

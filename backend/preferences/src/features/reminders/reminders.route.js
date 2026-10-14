@@ -5,13 +5,13 @@ async function registerReminderRoutes(app) {
     type: 'object', additionalProperties: false, required: ['eventId'],
     properties: { eventId: { type: 'string', format: 'uuid' } },
   };
-  app.get('/', { preHandler: app.authenticate }, remindersController.list);
+  app.get('/', { preHandler: app.authenticateMember }, remindersController.list);
   app.put('/:eventId', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: { params: eventParams },
   }, remindersController.create);
   app.delete('/:eventId', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: { params: eventParams },
   }, remindersController.remove);
 }

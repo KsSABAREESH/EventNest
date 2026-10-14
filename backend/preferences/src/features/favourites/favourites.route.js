@@ -2,9 +2,9 @@ const favouritesController = require('./favourites.controller');
 const { allowedCategories } = require('./favourites.service');
 
 async function registerFavouriteRoutes(app) {
-  app.get('/', { preHandler: app.authenticate }, favouritesController.get);
+  app.get('/', { preHandler: app.authenticateMember }, favouritesController.get);
   app.put('/', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: {
       body: {
         type: 'object', additionalProperties: false, required: ['categories'],
