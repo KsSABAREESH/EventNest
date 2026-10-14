@@ -8,6 +8,7 @@ import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategori
 import { getReminderEventIds, saveEventReminder } from '@/lib/api/reminders';
 import { getEventCardDesigns, type EventCardDesign } from '@/lib/api/card-design';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
+import { useToast } from '@/components/ui/ToastProvider';
 import { CardStickerOverlay, cardMutedTextClass, cardSurfaceClass } from '@/components/events/PersonalizedCardDesign';
 import {
   eventCategories,
@@ -126,6 +127,7 @@ function EventCard({
 
 export default function EventBrowse({ myFeedRequested = false }: { myFeedRequested?: boolean }) {
   const router = useRouter();
+  const toast = useToast();
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
   const [filters, setFilters] = useState(initialFilters);
   const [pageByView, setPageByView] = useState({ discover: 1, myFeed: 1 });
@@ -140,12 +142,9 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
   const [profileUsername, setProfileUsername] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<FavouriteCategory[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState('');
   const [remindedEventIds, setRemindedEventIds] = useState<Set<string>>(() => new Set());
   const [pendingReminderIds, setPendingReminderIds] = useState<Set<string>>(() => new Set());
-  const [reminderMessage, setReminderMessage] = useState('');
   const [cardDesigns, setCardDesigns] = useState<Record<string, EventCardDesign>>({});
-  const [cardDesignMessage, setCardDesignMessage] = useState('');
   const eventCarouselRef = useRef<HTMLDivElement>(null);
   const [canScrollEventsLeft, setCanScrollEventsLeft] = useState(false);
   const [canScrollEventsRight, setCanScrollEventsRight] = useState(false);
@@ -207,7 +206,7 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
             if (active) setRemindedEventIds(new Set(ids));
           } catch (reminderError) {
             if (active && !controller.signal.aborted) {
-              setReminderMessage(reminderError instanceof Error ? reminderError.message : 'We could not load your saved reminders.');
+              toast('error', reminderError instanceof Error ? reminderError.message : 'We could not load your saved reminders.');
             }
           }
         }
@@ -239,7 +238,7 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
       active = false;
       controller.abort();
     };
-  }, [router]);
+  }, [router, toast]);
 
   useEffect(() => {
     if (!accountChecked) return;
@@ -268,7 +267,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
   useEffect(() => {
     if (!result?.data.length || account?.role !== 'member') {
       setCardDesigns({});
-      setCardDesignMessage('');
       return;
     }
     const controller = new AbortController();
@@ -277,11 +275,9 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
     try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* show standard cards */ }
     if (!token) {
       setCardDesigns({});
-      setCardDesignMessage('');
       return () => controller.abort();
     }
     setCardDesigns({});
-    setCardDesignMessage('');
     getEventCardDesigns(result.data.map((event) => event.id), token, controller.signal)
       .then((designs) => {
         if (active) {
@@ -294,14 +290,14 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
         // Personalization is optional for browsing; keep event cards usable if the service is offline.
         if (active && !controller.signal.aborted) {
           setCardDesigns({});
-          setCardDesignMessage(designError instanceof Error ? designError.message : 'Saved card designs could not be loaded.');
+          toast('error', designError instanceof Error ? designError.message : 'Saved card designs could not be loaded.');
         }
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [result, account]);
+  }, [result, account, toast]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -337,7 +333,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
 
   async function saveUsername(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setProfileError('');
     setProfileSaving(true);
     try {
       const token = window.localStorage.getItem('eventnest.accessToken');
@@ -349,8 +344,9 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
       setAccount(user);
       setProfileStep('categories');
       setSelectedCategories([]);
+      toast('success', 'Your name has been saved.');
     } catch (requestError) {
-      setProfileError(requestError instanceof Error ? requestError.message : 'We could not save your name. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not save your name. Please try again.');
     } finally {
       setProfileSaving(false);
     }
@@ -364,7 +360,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
 
   async function saveCategories(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setProfileError('');
     setProfileSaving(true);
     try {
       const token = window.localStorage.getItem('eventnest.accessToken');
@@ -372,12 +367,13 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
       const saved = await saveFavouriteCategories(token, selectedCategories);
       setSelectedCategories(saved);
       setProfilePromptOpen(false);
+      toast('success', 'Your preferences have been saved.');
       router.replace('/events?my_feed=true');
       setLoading(true);
       setError('');
       setRetry((value) => value + 1);
     } catch (requestError) {
-      setProfileError(requestError instanceof Error ? requestError.message : 'We could not save your categories. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not save your categories. Please try again.');
     } finally {
       setProfileSaving(false);
     }
@@ -387,13 +383,12 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
     let token = '';
     try { token = window.localStorage.getItem('eventnest.accessToken') ?? ''; } catch { /* show sign-in message */ }
     if (!token || account?.role !== 'member') {
-      setReminderMessage('Log in with a member account to save event reminders.');
+      toast('error', 'Log in with a member account to save event reminders.');
       return;
     }
     if (pendingReminderIds.has(eventId)) return;
 
     const wasReminded = remindedEventIds.has(eventId);
-    setReminderMessage('');
     setRemindedEventIds((current) => {
       const next = new Set(current);
       if (wasReminded) next.delete(eventId);
@@ -410,7 +405,7 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
         else next.delete(eventId);
         return next;
       });
-      setReminderMessage(requestError instanceof Error ? requestError.message : 'We could not save your reminder. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not save your reminder. Please try again.');
     } finally {
       setPendingReminderIds((current) => {
         const next = new Set(current);
@@ -429,17 +424,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
       <EventsNavbar account={account} accountLoading={!accountChecked} onLogout={logOut} />
 
       <main id="discover" className="mx-auto w-full min-w-0 max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-        {reminderMessage && (
-          <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-nest-coral/20 bg-white px-4 py-3 text-sm text-[#a92622] shadow-sm">
-            <span>{reminderMessage}</span>
-            <button type="button" onClick={() => setReminderMessage('')} aria-label="Dismiss message" className="shrink-0 rounded-lg px-2 py-1 font-bold text-[#a92622] hover:bg-nest-coral/10">×</button>
-          </div>
-        )}
-        {cardDesignMessage && (
-          <div role="status" className="mb-5 rounded-2xl border border-[#1e1d57]/10 bg-white px-4 py-3 text-sm text-[#666577] shadow-sm">
-            Your saved card designs could not be shown. {cardDesignMessage}
-          </div>
-        )}
         <section className="relative w-full min-w-0 overflow-hidden rounded-[2rem] bg-[#f1effb] px-5 py-8 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
           <div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full border-[44px] border-white/45" />
           <div className="pointer-events-none absolute -bottom-36 right-[22%] h-72 w-72 rounded-full bg-[#ff0905]/[0.045]" />
@@ -636,7 +620,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
                     className="h-12 w-full rounded-xl border border-[#1e1d57]/15 px-4 text-sm text-[#171717] outline-none transition placeholder:text-[#9998a5] focus:border-nest-coral focus:ring-4 focus:ring-nest-coral/10"
                   />
                 </div>
-                {profileError && <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-3.5 py-3 text-sm leading-5 text-[#b91c1c]">{profileError}</p>}
                 <button type="submit" disabled={profileSaving || profileUsername.trim().length < 2} className="flex h-12 w-full items-center justify-center rounded-xl bg-nest-coral px-5 text-sm font-bold text-white shadow-lg shadow-nest-coral/15 transition hover:bg-[#df0805] disabled:cursor-wait disabled:opacity-65">
                   {profileSaving ? 'Saving…' : 'Next'}
                 </button>
@@ -651,7 +634,6 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
                     </button>;
                   })}
                 </div>
-                {profileError && <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-3.5 py-3 text-sm leading-5 text-[#b91c1c]">{profileError}</p>}
                 <button type="submit" disabled={profileSaving || selectedCategories.length === 0} className="flex h-12 w-full items-center justify-center rounded-xl bg-nest-coral px-5 text-sm font-bold text-white shadow-lg shadow-nest-coral/15 transition hover:bg-[#df0805] disabled:cursor-wait disabled:opacity-65">
                   {profileSaving ? 'Saving…' : 'Save and continue'}
                 </button>

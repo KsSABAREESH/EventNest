@@ -7,7 +7,7 @@ async function registerCardDesignRoutes(app) {
     properties: { eventId: { type: 'string', format: 'uuid' } },
   };
   app.get('/card-designs', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: {
       querystring: {
         type: 'object', additionalProperties: false, required: ['eventIds'],
@@ -18,11 +18,11 @@ async function registerCardDesignRoutes(app) {
     },
   }, cardDesignController.list);
   app.get('/:eventId/card-design', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: { params },
   }, cardDesignController.get);
   app.put('/:eventId/card-design', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: {
       params,
       body: {

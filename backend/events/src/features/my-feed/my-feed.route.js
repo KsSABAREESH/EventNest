@@ -14,7 +14,7 @@ const browseQuerySchema = {
 
 async function registerMyFeedRoutes(app) {
   app.get('/', {
-    preHandler: app.authenticate,
+    preHandler: app.authenticateMember,
     schema: { querystring: browseQuerySchema },
   }, myFeedController.browse);
 }

@@ -5,16 +5,17 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
+import { useToast } from '@/components/ui/ToastProvider';
 import { AuthApiError, favouriteCategories, getCurrentUser, getFavouriteCategories, saveFavouriteCategories, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
 
 export default function PreferencesPage() {
   const router = useRouter();
+  const toast = useToast();
   const [account, setAccount] = useState<AuthUser | null>(null);
   const [selected, setSelected] = useState<FavouriteCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,22 +65,20 @@ export default function PreferencesPage() {
     setSelected((current) => current.includes(category)
       ? current.filter((item) => item !== category)
       : [...current, category]);
-    setNotice('');
   }
 
   async function savePreferences() {
     if (!account || selected.length === 0) return;
     setSaving(true);
     setError('');
-    setNotice('');
     try {
       const token = window.localStorage.getItem('eventnest.accessToken');
       if (!token) { router.replace('/login'); return; }
       const saved = await saveFavouriteCategories(token, selected);
       setSelected(saved);
-      setNotice('Your preferences have been saved.');
+      toast('success', 'Your preferences have been saved.');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'We could not save your preferences. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not save your preferences. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -127,8 +126,6 @@ export default function PreferencesPage() {
                   );
                 })}
               </div>
-              {error && <p role="alert" className="mt-4 rounded-xl border border-nest-coral/20 bg-[#fff8f7] px-4 py-3 text-sm text-[#a92622]">{error}</p>}
-              {notice && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}
               <button type="button" onClick={savePreferences} disabled={saving || selected.length === 0} className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-nest-coral px-5 py-3 text-sm font-bold text-white shadow-md shadow-nest-coral/15 transition hover:bg-[#df0805] disabled:cursor-not-allowed disabled:opacity-55 sm:w-auto">
                 {saving ? 'Saving…' : 'Save preferences'}
               </button>

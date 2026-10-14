@@ -3,8 +3,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { submitCredentials } from '@/lib/api/auth';
+import { useToast } from '@/components/ui/ToastProvider';
 
 type AuthPanelProps = { mode: 'login' | 'signup'; signupSuccess?: boolean };
 
@@ -36,22 +37,26 @@ function EyeIcon({ visible }: { visible: boolean }) {
 
 export default function AuthPanel({ mode, signupSuccess = false }: AuthPanelProps) {
   const router = useRouter();
+  const toast = useToast();
   const isSignup = mode === 'signup';
+  const signupToastShown = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    if (signupSuccess && !isSignup && !signupToastShown.current) {
+      signupToastShown.current = true;
+      toast('success', 'Your account was created. Log in with your new email and password to continue.');
+    }
+  }, [isSignup, signupSuccess, toast]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage('');
-    setSuccessMessage('');
-
     if (isSignup && password !== confirmPassword) {
-      setErrorMessage('Those passwords do not match yet.');
+      toast('error', 'Those passwords do not match yet.');
       return;
     }
 
@@ -72,16 +77,12 @@ export default function AuthPanel({ mode, signupSuccess = false }: AuthPanelProp
       } catch {
         // Keep the successful API response visible if this browser blocks local storage.
       }
-      setSuccessMessage(
-        isSignup
-          ? 'Your account is ready. We’re excited to have you here.'
-          : `Welcome back, ${result.user.email}. You’re signed in.`,
-      );
+      toast('success', 'Welcome back. You are signed in.');
       setPassword('');
       setConfirmPassword('');
       router.replace('/events?my_feed=true');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      toast('error', error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -202,22 +203,6 @@ export default function AuthPanel({ mode, signupSuccess = false }: AuthPanelProp
                   className="h-12 w-full rounded-xl border border-[#ff0905]/25 bg-white px-4 text-[15px] text-neutral-950 outline-none transition placeholder:text-neutral-400 hover:border-[#ff0905]/55 focus:border-nest-coral focus:ring-4 focus:ring-nest-coral/10"
                 />
               </div>
-            )}
-
-            {errorMessage && (
-              <p role="alert" className="rounded-xl border border-nest-coral/25 bg-nest-coral/5 px-4 py-3 text-sm leading-5 text-[#b91c1c]">
-                {errorMessage}
-              </p>
-            )}
-            {signupSuccess && !isSignup && (
-              <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-5 text-emerald-800">
-                Your account was created. Log in with your new email and password to continue.
-              </p>
-            )}
-            {successMessage && (
-              <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-5 text-emerald-800">
-                {successMessage}
-              </p>
             )}
 
             <button

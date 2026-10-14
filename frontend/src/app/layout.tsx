@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import '@fontsource-variable/inter';
 import './globals.css';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
   title: 'EventNest | Discover local events',
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><ToastProvider>{children}</ToastProvider></body>
     </html>
   );
 }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import EventsNavbar from '@/components/navigation/EventsNavbar';
 import Dropdown, { type DropdownOption } from '@/components/ui/Dropdown';
+import { useToast } from '@/components/ui/ToastProvider';
 import { AuthApiError, getCurrentUser, getFavouriteCategories, type AuthUser, type FavouriteCategory } from '@/lib/api/auth';
 import { eventCategories, getEvents, getMyFeed, type CommunityEvent, type EventCategory, type EventsPage } from '@/lib/api/events';
 import {
@@ -108,6 +109,7 @@ function CardPreview({ event, design }: { event: CommunityEvent; design: EventCa
 
 export default function PersonalizePage() {
   const router = useRouter();
+  const toast = useToast();
   const [account, setAccount] = useState<AuthUser | null>(null);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [favouriteCategories, setFavouriteCategories] = useState<FavouriteCategory[]>([]);
@@ -123,7 +125,6 @@ export default function PersonalizePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [designListError, setDesignListError] = useState('');
-  const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [searchDraft, setSearchDraft] = useState('');
   const [categoryDraft, setCategoryDraft] = useState<EventCategory | ''>('');
@@ -268,7 +269,6 @@ export default function PersonalizePage() {
     async function loadDesign() {
       setDesignLoading(true);
       setError('');
-      setNotice('');
       try {
         const token = window.localStorage.getItem('eventnest.accessToken') ?? '';
         const next = await getEventCardDesign(selectedEvent!.id, token, controller.signal);
@@ -321,7 +321,6 @@ export default function PersonalizePage() {
   }
 
   function toggleSticker(sticker: CardSticker) {
-    setNotice('');
     setError('');
     setDesign((current) => current.stickers.includes(sticker)
       ? { ...current, stickers: current.stickers.filter((item) => item !== sticker) }
@@ -332,7 +331,6 @@ export default function PersonalizePage() {
     if (!selectedEvent || !isDirty || saving) return;
     setSaving(true);
     setError('');
-    setNotice('');
     try {
       const token = window.localStorage.getItem('eventnest.accessToken') ?? '';
       if (!token) { router.replace('/login'); return; }
@@ -340,9 +338,9 @@ export default function PersonalizePage() {
       setDesign(saved);
       setSavedDesign(saved);
       setCardDesigns((current) => ({ ...current, [selectedEvent.id]: saved }));
-      setNotice('Your card design is saved for this event.');
+      toast('success', 'Your card design is saved for this event.');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'We could not save your design. Please try again.');
+      toast('error', requestError instanceof Error ? requestError.message : 'We could not save your design. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -426,7 +424,7 @@ export default function PersonalizePage() {
                   const isSelected = selectedEvent?.id === event.id;
                   const pickerDesign = isSelected && !designLoading ? design : cardDesigns[event.id] ?? defaultDesign;
                   return (
-                  <button key={event.id} data-event-card type="button" onClick={() => { setSelectedEvent(event); setDesign(defaultDesign); setSavedDesign(defaultDesign); setDesignLoading(true); setError(''); setNotice(''); }} aria-pressed={isSelected} className={`group w-[calc(50vw_-_1.75rem)] min-w-0 shrink-0 snap-start overflow-hidden rounded-2xl border text-left shadow-[0_6px_24px_rgba(30,29,87,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-auto sm:shrink ${cardSurfaceClass(pickerDesign.theme)} ${isSelected ? 'border-nest-coral ring-2 ring-nest-coral/15' : ''}`}>
+                  <button key={event.id} data-event-card type="button" onClick={() => { setSelectedEvent(event); setDesign(defaultDesign); setSavedDesign(defaultDesign); setDesignLoading(true); setError(''); }} aria-pressed={isSelected} className={`group w-[calc(50vw_-_1.75rem)] min-w-0 shrink-0 snap-start overflow-hidden rounded-2xl border text-left shadow-[0_6px_24px_rgba(30,29,87,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-auto sm:shrink ${cardSurfaceClass(pickerDesign.theme)} ${isSelected ? 'border-nest-coral ring-2 ring-nest-coral/15' : ''}`}>
                     <div className="relative h-28 overflow-hidden bg-[#eeedf8] sm:h-32">
                       {/* Event photos are served by the event service. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -478,7 +476,6 @@ export default function PersonalizePage() {
                 <>
                   <CardPreview event={selectedEvent} design={design} />
                   {error && <p role="alert" className="mt-4 rounded-xl border border-nest-coral/20 bg-[#fff8f7] px-4 py-3 text-sm text-[#a92622]">{error}</p>}
-                  {notice && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}
 
                   <div className="mt-6">
                     <div className="flex items-center justify-between gap-3">
@@ -487,7 +484,7 @@ export default function PersonalizePage() {
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
                       {cardThemes.map((theme) => (
-                        <button key={theme} type="button" aria-pressed={design.theme === theme} onClick={() => { setDesign((current) => ({ ...current, theme })); setNotice(''); }} className={`min-w-0 rounded-xl border p-2 text-left transition ${design.theme === theme ? 'border-nest-coral bg-[#fff7f5] ring-2 ring-nest-coral/10' : 'border-[#1e1d57]/10 hover:border-[#1e1d57]/30'}`}>
+                        <button key={theme} type="button" aria-pressed={design.theme === theme} onClick={() => setDesign((current) => ({ ...current, theme }))} className={`min-w-0 rounded-xl border p-2 text-left transition ${design.theme === theme ? 'border-nest-coral bg-[#fff7f5] ring-2 ring-nest-coral/10' : 'border-[#1e1d57]/10 hover:border-[#1e1d57]/30'}`}>
                           <span className={`block h-12 rounded-lg ${themeDetails[theme].swatchClass}`} />
                           <span className="mt-2 block truncate text-[10px] font-bold text-nest-ink sm:text-xs">{themeDetails[theme].label}</span>
                           <span className="mt-0.5 block truncate text-[9px] text-[#777687] sm:text-[10px]">{themeDetails[theme].description}</span>
