@@ -22,4 +22,12 @@ async function me(request) {
   return { user };
 }
 
-module.exports = { login, me };
+async function listMembers(request) {
+  return adminService.listMembers(request.query);
+}
+
+async function getMember(request) {
+  return { data: await adminService.getMember(request.params.userId) };
+}
+
+module.exports = { getMember, listMembers, login, me };
