@@ -26,7 +26,9 @@ function buildWhere(filters) {
   }
   if (filters.q) {
     values.push(filters.q);
-    conditions.push(`search_document @@ WEBSEARCH_TO_TSQUERY('simple', $${values.length})`);
+    conditions.push(`(title ILIKE '%' || $${values.length} || '%'
+      OR city ILIKE '%' || $${values.length} || '%'
+      OR description ILIKE '%' || $${values.length} || '%')`);
   }
 
   return { where: conditions.length ? conditions.join(' AND ') : 'TRUE', values };
