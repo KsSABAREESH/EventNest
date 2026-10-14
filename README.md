@@ -40,6 +40,12 @@ npm run dev:preferences
 
 Open <http://localhost:3000>. Check service health at `http://localhost:4001/health`, `http://localhost:4002/health`, and `http://localhost:4003/health`. The `/ready` endpoint also verifies a PostgreSQL connection. The local database credentials in the example files are for development only; replace them for any shared or deployed environment.
 
+### Admin login
+
+To sign in as an administrator, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `backend/.env`. The password must be at least 12 characters. The setup script generates an admin password if one is not already configured; it prints that password once and saves it in `backend/.env`. Restart the auth service after changing either value.
+
+The admin sign-in page is intentionally not linked from the public navigation for security reasons. Open <http://localhost:3000/admin/login> directly and sign in with the configured email and password.
+
 ## Services and ports
 
 | Workspace | Port | Responsibility |
