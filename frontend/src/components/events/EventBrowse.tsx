@@ -129,6 +129,7 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
   const router = useRouter();
   const toast = useToast();
   const [draft, setDraft] = useState({ category: '' as EventCategory | '', city: '', q: '' });
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
   const [pageByView, setPageByView] = useState({ discover: 1, myFeed: 1 });
   const [result, setResult] = useState<EventsPage | null>(null);
@@ -424,9 +425,11 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
       <EventsNavbar account={account} accountLoading={!accountChecked} onLogout={logOut} />
 
       <main id="discover" className="mx-auto w-full min-w-0 max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-        <section className="relative w-full min-w-0 overflow-hidden rounded-[2rem] bg-[#f1effb] px-5 py-8 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
-          <div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full border-[44px] border-white/45" />
-          <div className="pointer-events-none absolute -bottom-36 right-[22%] h-72 w-72 rounded-full bg-[#ff0905]/[0.045]" />
+        <section className="relative w-full min-w-0 overflow-visible rounded-[2rem] bg-[#f1effb] px-5 py-8 sm:px-10 sm:py-12 lg:px-14 lg:py-14">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[2rem]">
+            <div className="absolute -right-16 -top-32 h-80 w-80 rounded-full border-[44px] border-white/45" />
+            <div className="absolute -bottom-36 right-[22%] h-72 w-72 rounded-full bg-[#ff0905]/[0.045]" />
+          </div>
           <div className="relative z-10 w-full min-w-0 max-w-3xl">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#ff0905]/15 bg-white/70 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#d91c18]">
               <span className="h-1.5 w-1.5 rounded-full bg-nest-coral" /> Your city, a little closer
@@ -462,18 +465,41 @@ export default function EventBrowse({ myFeedRequested = false }: { myFeedRequest
                 className="w-full min-w-0 border-0 bg-transparent text-sm text-[#171717] outline-none placeholder:text-[#9594a2]"
               />
             </label>
-            <label className="flex h-12 min-w-0 items-center rounded-xl border border-[#1e1d57]/10 px-3.5 transition focus-within:border-nest-coral focus-within:ring-4 focus-within:ring-nest-coral/10">
-              <span className="sr-only">Category</span>
-              <select
-                value={draft.category}
-                onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value as EventCategory | '' }))}
-                className="w-full appearance-none border-0 bg-transparent text-sm text-[#565568] outline-none"
+            <div className="relative min-w-0">
+              <button
+                type="button"
+                aria-label="Category"
+                aria-haspopup="listbox"
+                aria-expanded={categoryMenuOpen}
+                onClick={() => setCategoryMenuOpen((open) => !open)}
+                onKeyDown={(event) => { if (event.key === 'Escape') setCategoryMenuOpen(false); }}
+                className={`group flex h-12 w-full min-w-0 items-center justify-between rounded-xl border bg-white px-3.5 text-left transition focus-visible:outline-none ${categoryMenuOpen ? 'border-nest-coral ring-4 ring-nest-coral/10' : 'border-[#1e1d57]/10 hover:border-[#1e1d57]/20'}`}
               >
-                <option value="">All categories</option>
-                {eventCategories.map((category) => <option key={category} value={category}>{category}</option>)}
-              </select>
-              <span aria-hidden="true" className="ml-2 text-xs text-[#858493]">⌄</span>
-            </label>
+                <span className={`truncate text-sm ${draft.category ? 'text-[#38374f]' : 'text-[#565568]'}`}>{draft.category || 'All categories'}</span>
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={`ml-2 h-4 w-4 shrink-0 text-[#858493] transition-transform group-hover:text-nest-coral ${categoryMenuOpen ? 'rotate-180 text-nest-coral' : ''}`}>
+                  <path d="m5.5 7.5 4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {categoryMenuOpen && (
+                <div role="listbox" aria-label="Event category" className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 max-h-64 overflow-y-auto rounded-xl border border-[#1e1d57]/10 bg-white p-1.5 shadow-[0_16px_40px_rgba(30,29,87,0.18)]">
+                  {['', ...eventCategories].map((category) => {
+                    const selected = draft.category === category;
+                    return (
+                      <button
+                        key={category || 'all'}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        onClick={() => { setDraft((current) => ({ ...current, category: category as EventCategory | '' })); setCategoryMenuOpen(false); }}
+                        className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${selected ? 'bg-[#f1effb] font-semibold text-nest-ink' : 'text-[#565568] hover:bg-[#f8f7fc] hover:text-nest-ink'}`}
+                      >
+                        {category || 'All categories'}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button type="submit" className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-nest-coral px-6 text-sm font-bold text-white shadow-md shadow-nest-coral/15 transition hover:bg-[#df0805] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nest-ink">
               <SearchIcon /> <span>Find events</span>
             </button>
