@@ -9,26 +9,27 @@ The auth service provides signup, login, profile completion, and admin authentic
 ## Requirements
 
 - Node.js 20.9 or newer and npm 10 or newer.
-- Docker Compose for the local PostgreSQL instance, or a compatible PostgreSQL server.
+- PostgreSQL, using either a local PostgreSQL server or Docker Desktop with Docker Compose. If PostgreSQL is not installed locally, install Docker Desktop; you do not need to install PostgreSQL separately.
 
 ## Run locally
 
-From the repository root:
+From the repository root, make sure PostgreSQL is running. If PostgreSQL is not installed locally, install and start Docker Desktop; you do not need to install PostgreSQL separately. Then start the project database with Docker Compose:
 
 ```powershell
-Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env.local
 docker compose up -d postgres
-npm install
-npm run db:migrate
-npm run db:seed
 ```
 
-Before starting the auth service, replace the `JWT_SECRET` and `ADMIN_PASSWORD` placeholders in `backend/.env`. Use a random JWT secret with at least 32 characters and an admin password with at least 12 characters. The default admin email is `admin@eventnest.local`; the password is the value you set as `ADMIN_PASSWORD` in that file. Sign in at `/admin/login`.
+If you already have a local PostgreSQL server, make sure it is running and configured in `backend/.env` instead. After PostgreSQL is running, run the setup script:
 
-The seed can be run again safely; it upserts the same 15 sample events and uses dates relative to the current day.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup-local.ps1
+```
 
-Start each process in its own terminal from the repository root:
+The script creates the local environment files if missing, generates secure local JWT/admin secrets when the example placeholders are present, installs npm dependencies, applies migrations, and seeds the sample events. It does not launch PostgreSQL or the app services. Requirements: Node.js 20.9+, npm 10+, and a running PostgreSQL server. With Docker Compose, the database credentials and connection URL match the provided environment example. If you use a local PostgreSQL installation, configure its connection in `backend/.env`. The generated admin password is printed once at the end and stored in `backend/.env`.
+
+The setup script is safe to rerun. Migrations are tracked and the seed upserts the same 15 events with dates relative to the current day.
+
+After setup finishes, start the frontend and each backend microservice in its own terminal from the repository root:
 
 ```powershell
 npm run dev
@@ -133,4 +134,4 @@ The Next.js server routes use an HTTP-only, same-site cookie when proxying admin
 
 ## Demo recording
 
-Record a 3–4 minute walkthrough showing the app at phone and laptop sizes, then explain two or three implementation choices in your own words. The recording is not included in this repository yet.
+Record a 3-4 minute walkthrough showing the app at phone and laptop sizes, then explain two or three implementation choices in your own words. The recording is not included in this repository yet.
